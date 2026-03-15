@@ -13,6 +13,11 @@
  */
 
 import browser from "webextension-polyfill";
+import { logService } from "./LogService";
+import { storageService } from "./StorageService";
+import templateBlock from "./templating";
+import { BLOCK_DEFINITIONS } from "~tabs/dashboard/editor/data/blocks";
+import { workflowService } from "./WorkflowService";
 
 type NodeEdge = { id: string; source: string; target: string; sourceHandle?: string; targetHandle?: string };
 type FlowNode = { id: string; type?: string; data: Record<string, any> & { label: string } };
@@ -25,6 +30,7 @@ interface ExecutionContext {
   variables: Record<string, any>;
   tableData: Record<string, any[]>;
   loopData: Record<string, { index: number; data: any[] }>;
+  repeatedTasks: Record<string, number>;
 }
 
 interface ExecutionResult {
@@ -45,6 +51,40 @@ const executors: Record<string, BlockExecutor> = {
 
   trigger: async (_data, _ctx) => ({ success: true, nextOutput: "output" }),
 
+  "execute-workflow": async (data, ctx) => {
+    const workflowId = data.workflowId;
+    if (!workflowId) return { success: false, error: "Workflow ID is empty" };
+
+    const workflow = await workflowService.getWorkflowById(workflowId);
+    if (!workflow) return { success: false, error: "Workflow not found" };
+
+    if (workflowId === ctx.workflowId) return { success: false, error: "Infinite loop detected" };
+
+    // Pass data
+    const childVariables = { ...ctx.variables };
+    if (data.globalData) {
+      try {
+        const globalData = typeof data.globalData === 'string' ? JSON.parse(data.globalData) : data.globalData;
+        Object.assign(childVariables, globalData);
+      } catch {}
+    }
+
+    try {
+      await executeWorkflow(workflowId, workflow.drawflow, { 
+        variables: childVariables,
+        tabId: ctx.tabId || undefined 
+      });
+      return { success: true, nextOutput: "output" };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  "workflow-state": async (data, _ctx) => {
+    // Placeholder for workflow state management (stop, pause, etc.)
+    return { success: true, nextOutput: "output" };
+  },
+
   delay: async (data, _ctx) => {
     const ms = Number(data.time) || 500;
     await sleep(ms);
@@ -52,8 +92,11 @@ const executors: Record<string, BlockExecutor> = {
   },
 
   "new-tab": async (data, ctx) => {
-    const url = resolveValue(data.url, ctx);
-    const tab = await browser.tabs.create({ url, active: data.active !== false });
+    const tab = await browser.tabs.create({ 
+      url: data.url, 
+      active: data.active !== false,
+      windowId: ctx.windowId ?? undefined
+    });
     ctx.tabId = tab.id ?? null;
     ctx.windowId = tab.windowId ?? null;
     if (data.waitTabLoaded && ctx.tabId) {
@@ -86,25 +129,80 @@ const executors: Record<string, BlockExecutor> = {
   },
 
   "switch-tab": async (data, ctx) => {
-    const url = resolveValue(data.url, ctx);
+    const url = data.url;
     const tabs = await browser.tabs.query({});
     const match = tabs.find(t => t.url && matchUrl(t.url, url));
     if (match?.id) {
       await browser.tabs.update(match.id, { active: true });
+      if (match.windowId) await browser.windows.update(match.windowId, { focused: true });
       ctx.tabId = match.id;
+      ctx.windowId = match.windowId;
     } else if (data.createIfNoMatch) {
       const tab = await browser.tabs.create({ url });
       ctx.tabId = tab.id ?? null;
+      ctx.windowId = tab.windowId;
     }
     return { success: true, nextOutput: "output" };
   },
 
   "new-window": async (data, ctx) => {
-    const url = resolveValue(data.url, ctx);
-    const win = await browser.windows.create({ url, type: data.type || "normal", incognito: data.incognito || false });
+    const win = await browser.windows.create({ 
+      url: data.url, 
+      type: data.type || "normal", 
+      incognito: data.incognito || false,
+      top: data.top ? Number(data.top) : undefined,
+      left: data.left ? Number(data.left) : undefined,
+      width: data.width ? Number(data.width) : undefined,
+      height: data.height ? Number(data.height) : undefined,
+      state: data.windowState || "normal"
+    });
     const tab = win.tabs?.[0];
     ctx.tabId = tab?.id ?? null;
     ctx.windowId = win.id ?? null;
+    return { success: true, nextOutput: "output" };
+  },
+
+  "forward-page": async (_data, ctx) => {
+    if (ctx.tabId) await browser.tabs.goForward(ctx.tabId);
+    return { success: true, nextOutput: "output" };
+  },
+
+  "tab-url": async (data, ctx) => {
+    if (!ctx.tabId) return { success: false, error: "No active tab" };
+    const tab = await browser.tabs.get(ctx.tabId);
+    const url = tab.url || "";
+    if (data.assignVariable && data.variableName) {
+      ctx.variables[data.variableName] = url;
+    }
+    return { success: true, nextOutput: "output" };
+  },
+
+  cookie: async (data, ctx) => {
+    const type = data.type || "get";
+    const details: any = {
+      name: data.name,
+      url: data.url || (ctx.tabId ? (await browser.tabs.get(ctx.tabId)).url : ""),
+    };
+
+    if (type === "get") {
+      const cookie = await browser.cookies.get(details);
+      if (data.assignVariable && data.variableName) {
+        ctx.variables[data.variableName] = cookie ? cookie.value : null;
+      }
+    } else if (type === "set") {
+      await browser.cookies.set({
+        ...details,
+        value: data.value,
+        domain: data.domain || undefined,
+        path: data.path || undefined,
+        secure: data.secure || false,
+        httpOnly: data.httpOnly || false,
+        expirationDate: data.expirationDate ? Number(data.expirationDate) : undefined,
+      });
+    } else if (type === "delete") {
+      await browser.cookies.remove(details);
+    }
+
     return { success: true, nextOutput: "output" };
   },
 
@@ -114,14 +212,14 @@ const executors: Record<string, BlockExecutor> = {
       { format: (data.ext || "png") as "png" | "jpeg" }
     );
     if (data.saveToComputer !== false) {
-      const filename = (resolveValue(data.fileName, ctx) || "screenshot") + "." + (data.ext || "png");
+      const filename = (data.fileName || "screenshot") + "." + (data.ext || "png");
       await browser.downloads.download({ url: dataUrl, filename, conflictAction: "uniquify" });
     }
     return { success: true, nextOutput: "output" };
   },
 
   "export-data": async (data, ctx) => {
-    const name = resolveValue(data.name, ctx) || "export";
+    const name = data.name || "export";
     const rows = Object.values(ctx.tableData).flat();
     const type = data.type || "json";
     const content = type === "csv"
@@ -138,18 +236,18 @@ const executors: Record<string, BlockExecutor> = {
     await browser.notifications.create({
       type: "basic",
       iconUrl: browser.runtime.getURL("assets/icon.png"),
-      title: resolveValue(data.title, ctx) || "Fluxo",
-      message: resolveValue(data.message, ctx) || "",
+      title: data.title || "Fluxo",
+      message: data.message || "",
     });
     return { success: true, nextOutput: "output" };
   },
 
   webhook: async (data, ctx) => {
     try {
-      const url = resolveValue(data.url, ctx);
+      const url = data.url;
       const method = data.method || "POST";
       const headers: Record<string, string> = { "Content-Type": "application/json" };
-      const body = ["GET", "HEAD"].includes(method) ? undefined : resolveValue(data.body, ctx);
+      const body = ["GET", "HEAD"].includes(method) ? undefined : data.body;
 
       const resp = await fetchWithTimeout(url, { method, headers, body }, data.timeout || 10000);
       const text = await resp.text();
@@ -168,10 +266,10 @@ const executors: Record<string, BlockExecutor> = {
     const list: Array<{ name: string; value: any; type: string }> = data.dataList || [];
     for (const item of list) {
       if (item.type === "variable") {
-        ctx.variables[item.name] = resolveValue(item.value, ctx);
+        ctx.variables[item.name] = item.value;
       } else {
         if (!ctx.tableData[item.name]) ctx.tableData[item.name] = [];
-        ctx.tableData[item.name].push(resolveValue(item.value, ctx));
+        ctx.tableData[item.name].push(item.value);
       }
     }
     return { success: true, nextOutput: "output" };
@@ -191,7 +289,7 @@ const executors: Record<string, BlockExecutor> = {
     if (!ctx.tabId) return { success: false, error: "No active tab" };
     const result = await browser.tabs.sendMessage(ctx.tabId, {
       action: "clipboard",
-      data: { type: data.type || "get", text: resolveValue(data.dataToCopy, ctx) },
+      data: { type: data.type || "get", text: data.dataToCopy },
     }).catch(() => null);
     if (result && data.assignVariable && data.variableName) {
       ctx.variables[data.variableName] = result;
@@ -203,7 +301,10 @@ const executors: Record<string, BlockExecutor> = {
     const loopId = data.loopId || "loop";
     if (!ctx.loopData[loopId]) {
       let items: any[] = [];
-      try { items = JSON.parse(resolveValue(data.loopData, ctx) || "[]"); } catch {}
+      try { 
+        const rawData = data.loopData;
+        items = typeof rawData === 'string' ? JSON.parse(rawData || "[]") : (Array.isArray(rawData) ? rawData : []);
+      } catch {}
       ctx.loopData[loopId] = { index: 0, data: items };
     }
     const loop = ctx.loopData[loopId];
@@ -234,7 +335,98 @@ const executors: Record<string, BlockExecutor> = {
   },
   "switch-to": async (data, ctx) => contentScriptBlock("switch-to", data, ctx),
   "handle-dialog": async (data, ctx) => contentScriptBlock("handle-dialog", data, ctx),
+
+  "repeat-task": async (data, ctx) => {
+    const repeat = Number(data.repeatFor) || 0;
+    const blockId = data.id || "repeat";
+    const currentCount = ctx.repeatedTasks[blockId] || 0;
+
+    if (currentCount >= repeat) {
+      delete ctx.repeatedTasks[blockId];
+      return { success: true, nextOutput: "output" }; // Main output
+    } else {
+      ctx.repeatedTasks[blockId] = currentCount + 1;
+      return { success: true, nextOutput: "output-2" }; // Loop output
+    }
+  },
+
+  "while-loop": async (data, ctx) => {
+    const isMatch = await testBasicConditions(data.conditions, ctx);
+    if (isMatch) return { success: true, nextOutput: "output-2" }; // Loop output
+    return { success: true, nextOutput: "output" }; // Fallback/End
+  },
+
+  conditions: async (data, ctx) => {
+    const conditions = data.conditions || [];
+    for (let i = 0; i < conditions.length; i++) {
+      const isMatch = await testBasicConditions([conditions[i]], ctx);
+      if (isMatch) return { success: true, nextOutput: `output-${i + 1}` };
+    }
+    return { success: true, nextOutput: "fallback" };
+  },
+
+  "slice-variable": async (data, ctx) => {
+    const val = ctx.variables[data.variableName];
+    if (typeof val === 'string' || Array.isArray(val)) {
+      ctx.variables[data.variableName] = val.slice(data.startIndex || 0, data.endIndex);
+    }
+    return { success: true, nextOutput: "output" };
+  },
+
+  "increase-variable": async (data, ctx) => {
+    const val = Number(ctx.variables[data.variableName]) || 0;
+    ctx.variables[data.variableName] = val + (Number(data.increaseBy) || 1);
+    return { success: true, nextOutput: "output" };
+  },
+
+  "regex-variable": async (data, ctx) => {
+    const val = String(ctx.variables[data.variableName] || "");
+    const regex = new RegExp(data.regex, data.flags || "");
+    const match = val.match(regex);
+    if (data.assignVariable && data.variableNameResult) {
+      ctx.variables[data.variableNameResult] = match ? match[0] : "";
+    }
+    return { success: true, nextOutput: "output" };
+  },
 };
+
+async function testBasicConditions(conditions: any[], ctx: ExecutionContext): Promise<boolean> {
+  if (!conditions || !conditions.length) return false;
+  
+  for (const group of conditions) {
+    let groupMatch = true;
+    const items = group.items || [];
+    
+    // Each group is an AND of its items
+    for (const item of items) {
+      const { type, data } = item;
+      let valA: any = "";
+      let valB: any = "";
+      
+      if (type === 'value') {
+        valA = item.value; // Already templated by engine
+        // We need a way to get the comparison operator and second value
+        // For now, let's assume item has 'operator' and 'compareValue'
+        const operator = item.operator || 'eq';
+        valB = item.compareValue;
+        
+        switch (operator) {
+          case 'eq': groupMatch = valA === valB; break;
+          case 'nq': groupMatch = valA !== valB; break;
+          case 'cnt': groupMatch = String(valA).includes(String(valB)); break;
+          case 'rgx': groupMatch = new RegExp(valB).test(String(valA)); break;
+          default: groupMatch = valA === valB;
+        }
+      }
+      
+      if (!groupMatch) break;
+    }
+    
+    // Any group matching means the whole condition is true (OR between groups)
+    if (groupMatch && items.length > 0) return true;
+  }
+  return false;
+}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Main engine export
@@ -242,16 +434,22 @@ const executors: Record<string, BlockExecutor> = {
 export async function executeWorkflow(
   workflowId: string,
   drawflow: DrawFlow,
-  options: { tabId?: number; startNodeId?: string } = {}
+  options: { tabId?: number; startNodeId?: string; variables?: Record<string, any> } = {}
 ): Promise<void> {
   const ctx: ExecutionContext = {
     workflowId,
     tabId: options.tabId ?? null,
     windowId: null,
-    variables: {},
+    variables: { 
+      ...(await storageService.getAllVariables()),
+      ...options.variables 
+    },
     tableData: {},
     loopData: {},
+    repeatedTasks: {},
   };
+
+  const logId = await logService.startLog(workflowId, drawflow.nodes.find(n => n.data.label === "trigger")?.data.label || "Workflow");
 
   const nodeMap = new Map(drawflow.nodes.map(n => [n.id, n]));
   const edgeMap = new Map<string, NodeEdge[]>();
@@ -308,11 +506,41 @@ export async function executeWorkflow(
 
     let result: ExecutionResult;
     try {
-      result = await executor(node.data, ctx);
+      const blockDef = BLOCK_DEFINITIONS[blockType];
+      const templatedNode = await templateBlock({
+        block: node,
+        refKeys: blockDef?.refDataKeys,
+        data: {
+          variables: ctx.variables,
+          table: ctx.tableData,
+          loopData: ctx.loopData,
+          workflow: { id: workflowId },
+        },
+      });
+
+      result = await executor(templatedNode.data, ctx);
       console.log(`[WorkflowEngine] Result for ${blockType}:`, result);
+
+      if (result.success) {
+        await logService.addLogData(logId, {
+          nodeId: node.id,
+          blockType,
+          status: 'success',
+          timestamp: Date.now(),
+          variables: { ...ctx.variables }
+        });
+      }
     } catch (err: any) {
       console.error(`[WorkflowEngine] Error at block ${blockType} (${currentNodeId}):`, err);
       result = { success: false, error: err.message };
+      
+      await logService.addLogData(logId, {
+        nodeId: node.id,
+        blockType,
+        status: 'error',
+        message: err.message,
+        timestamp: Date.now()
+      });
     }
 
     if (!result.success && !result.nextOutput) break;
@@ -325,6 +553,7 @@ export async function executeWorkflow(
     currentNodeId = nextEdge?.target ?? null;
   }
 
+  await logService.finishLog(logId, steps < MAX_STEPS ? 'success' : 'error', steps >= MAX_STEPS ? 'Max steps reached' : undefined);
   console.log(`[WorkflowEngine] Finished workflow ${workflowId} in ${steps} steps`);
 }
 
@@ -358,19 +587,7 @@ async function contentScriptBlock(blockType: string, data: Record<string, any>, 
   }
 }
 
-/** Replace {{variableName}} and {{tableColumn[0]}} references */
-function resolveValue(value: any, ctx: ExecutionContext): any {
-  if (typeof value !== "string") return value;
-  return value.replace(/\{\{(.+?)\}\}/g, (_, key) => {
-    const trimmed = key.trim();
-    if (trimmed in ctx.variables) return String(ctx.variables[trimmed]);
-    const parts = trimmed.match(/^(.+)\[(\d+)\]$/);
-    if (parts && ctx.tableData[parts[1]]) {
-      return String(ctx.tableData[parts[1]][parseInt(parts[2])] ?? "");
-    }
-    return `{{${key}}}`;
-  });
-}
+
 
 function sleep(ms: number): Promise<void> {
   return new Promise(res => setTimeout(res, ms));

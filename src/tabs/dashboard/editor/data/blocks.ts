@@ -23,6 +23,7 @@ export interface BlockDefinition {
   maxConnection: number;
   disableEdit?: boolean;
   data: Record<string, any>;
+  refDataKeys?: string[];
 }
 
 export const BLOCK_DEFINITIONS: Record<string, BlockDefinition> = {
@@ -49,6 +50,7 @@ export const BLOCK_DEFINITIONS: Record<string, BlockDefinition> = {
       url: '',
       shortcut: '',
     },
+    refDataKeys: ['url'],
   },
   'execute-workflow': {
     id: 'execute-workflow',
@@ -69,6 +71,7 @@ export const BLOCK_DEFINITIONS: Record<string, BlockDefinition> = {
       globalData: '',
       description: '',
     },
+    refDataKeys: ['globalData'],
   },
   delay: {
     id: 'delay',
@@ -102,6 +105,7 @@ export const BLOCK_DEFINITIONS: Record<string, BlockDefinition> = {
       type: 'json',
       description: '',
     },
+    refDataKeys: ['name'],
   },
   notification: {
     id: 'notification',
@@ -116,6 +120,7 @@ export const BLOCK_DEFINITIONS: Record<string, BlockDefinition> = {
     allowedInputs: true,
     maxConnection: 1,
     data: { disableBlock: false, description: '', message: '', title: '' },
+    refDataKeys: ['message', 'title'],
   },
   clipboard: {
     id: 'clipboard',
@@ -130,6 +135,7 @@ export const BLOCK_DEFINITIONS: Record<string, BlockDefinition> = {
     allowedInputs: true,
     maxConnection: 1,
     data: { disableBlock: false, type: 'get', description: '', dataToCopy: '' },
+    refDataKeys: ['dataToCopy'],
   },
   'wait-connections': {
     id: 'wait-connections',
@@ -179,6 +185,7 @@ export const BLOCK_DEFINITIONS: Record<string, BlockDefinition> = {
       active: true,
       waitTabLoaded: false,
     },
+    refDataKeys: ['url'],
   },
   'active-tab': {
     id: 'active-tab',
@@ -207,6 +214,7 @@ export const BLOCK_DEFINITIONS: Record<string, BlockDefinition> = {
     allowedInputs: true,
     maxConnection: 1,
     data: { disableBlock: false, url: '', description: '', activeTab: true },
+    refDataKeys: ['url'],
   },
   'switch-tab': {
     id: 'switch-tab',
@@ -228,6 +236,7 @@ export const BLOCK_DEFINITIONS: Record<string, BlockDefinition> = {
       createIfNoMatch: false,
       findTabBy: 'match-patterns',
     },
+    refDataKeys: ['url'],
   },
   'new-window': {
     id: 'new-window',
@@ -248,6 +257,7 @@ export const BLOCK_DEFINITIONS: Record<string, BlockDefinition> = {
       type: 'normal',
       incognito: false,
     },
+    refDataKeys: ['url'],
   },
   'go-back': {
     id: 'go-back',
@@ -297,6 +307,7 @@ export const BLOCK_DEFINITIONS: Record<string, BlockDefinition> = {
       fullPage: false,
       saveToComputer: true,
     },
+    refDataKeys: ['fileName'],
   },
   'browser-event': {
     id: 'browser-event',
@@ -330,6 +341,7 @@ export const BLOCK_DEFINITIONS: Record<string, BlockDefinition> = {
     allowedInputs: true,
     maxConnection: 1,
     data: { disableBlock: false, description: '', accept: true, promptText: '' },
+    refDataKeys: ['promptText'],
   },
   'handle-download': {
     id: 'handle-download',
@@ -344,6 +356,7 @@ export const BLOCK_DEFINITIONS: Record<string, BlockDefinition> = {
     allowedInputs: true,
     maxConnection: 1,
     data: { disableBlock: false, description: '', filename: '', timeout: 20000 },
+    refDataKeys: ['filename'],
   },
   proxy: {
     id: 'proxy',
@@ -365,6 +378,7 @@ export const BLOCK_DEFINITIONS: Record<string, BlockDefinition> = {
       port: 443,
       clearProxy: false,
     },
+    refDataKeys: ['host'],
   },
   // Interaction Category
   'event-click': {
@@ -387,6 +401,7 @@ export const BLOCK_DEFINITIONS: Record<string, BlockDefinition> = {
       waitForSelector: false,
       waitSelectorTimeout: 5000,
     },
+    refDataKeys: ['selector'],
   },
   'get-text': {
     id: 'get-text',
@@ -410,6 +425,7 @@ export const BLOCK_DEFINITIONS: Record<string, BlockDefinition> = {
       assignVariable: false,
       variableName: '',
     },
+    refDataKeys: ['selector'],
   },
   forms: {
     id: 'forms',
@@ -430,6 +446,7 @@ export const BLOCK_DEFINITIONS: Record<string, BlockDefinition> = {
       type: 'text-field',
       value: '',
     },
+    refDataKeys: ['selector', 'value'],
   },
   'javascript-code': {
     id: 'javascript-code',
@@ -470,6 +487,7 @@ export const BLOCK_DEFINITIONS: Record<string, BlockDefinition> = {
       eventName: '',
       eventType: '',
     },
+    refDataKeys: ['selector'],
   },
   'element-scroll': {
     id: 'element-scroll',
@@ -490,6 +508,7 @@ export const BLOCK_DEFINITIONS: Record<string, BlockDefinition> = {
       scrollY: 0,
       scrollX: 0,
     },
+    refDataKeys: ['selector', 'scrollY', 'scrollX'],
   },
   link: {
     id: 'link',
@@ -504,6 +523,7 @@ export const BLOCK_DEFINITIONS: Record<string, BlockDefinition> = {
     allowedInputs: true,
     maxConnection: 1,
     data: { disableBlock: false, description: '', selector: '', openInNewTab: false },
+    refDataKeys: ['selector'],
   },
   'attribute-value': {
     id: 'attribute-value',
@@ -524,6 +544,7 @@ export const BLOCK_DEFINITIONS: Record<string, BlockDefinition> = {
       attributeName: '',
       action: 'get',
     },
+    refDataKeys: ['selector', 'attributeName'],
   },
   'hover-element': {
     id: 'hover-element',
@@ -538,6 +559,7 @@ export const BLOCK_DEFINITIONS: Record<string, BlockDefinition> = {
     allowedInputs: true,
     maxConnection: 1,
     data: { disableBlock: false, description: '', selector: '', findBy: 'cssSelector' },
+    refDataKeys: ['selector'],
   },
   'upload-file': {
     id: 'upload-file',
@@ -552,6 +574,7 @@ export const BLOCK_DEFINITIONS: Record<string, BlockDefinition> = {
     allowedInputs: true,
     maxConnection: 1,
     data: { disableBlock: false, selector: '', filePaths: [] },
+    refDataKeys: ['selector', 'filePaths'],
   },
   'save-assets': {
     id: 'save-assets',
@@ -566,6 +589,7 @@ export const BLOCK_DEFINITIONS: Record<string, BlockDefinition> = {
     allowedInputs: true,
     maxConnection: 1,
     data: { disableBlock: false, description: '', selector: '', type: 'element' },
+    refDataKeys: ['selector'],
   },
   'press-key': {
     id: 'press-key',
@@ -580,6 +604,7 @@ export const BLOCK_DEFINITIONS: Record<string, BlockDefinition> = {
     allowedInputs: true,
     maxConnection: 1,
     data: { disableBlock: false, keys: '', description: '', action: 'press-key' },
+    refDataKeys: ['keys'],
   },
   'switch-to': {
     id: 'switch-to',
@@ -594,6 +619,7 @@ export const BLOCK_DEFINITIONS: Record<string, BlockDefinition> = {
     allowedInputs: true,
     maxConnection: 1,
     data: { disableBlock: false, selector: '', windowType: 'main-window' },
+    refDataKeys: ['selector'],
   },
   // Conditions Category
   conditions: {
@@ -623,6 +649,7 @@ export const BLOCK_DEFINITIONS: Record<string, BlockDefinition> = {
     allowedInputs: true,
     maxConnection: 1,
     data: { disableBlock: false, description: '', selector: '', tryCount: 1, timeout: 500 },
+    refDataKeys: ['selector'],
   },
   'while-loop': {
     id: 'while-loop',
@@ -658,6 +685,7 @@ export const BLOCK_DEFINITIONS: Record<string, BlockDefinition> = {
       description: '',
       loopThrough: 'data-columns',
     },
+    refDataKeys: ['loopData'],
   },
   'loop-elements': {
     id: 'loop-elements',
@@ -672,6 +700,7 @@ export const BLOCK_DEFINITIONS: Record<string, BlockDefinition> = {
     allowedInputs: true,
     maxConnection: 1,
     data: { disableBlock: false, loopId: '', selector: '', maxLoop: '0', description: '' },
+    refDataKeys: ['selector', 'maxLoop'],
   },
   'loop-breakpoint': {
     id: 'loop-breakpoint',
@@ -699,6 +728,7 @@ export const BLOCK_DEFINITIONS: Record<string, BlockDefinition> = {
     allowedInputs: true,
     maxConnection: 1,
     data: { disableBlock: false, repeatFor: '1' },
+    refDataKeys: ['repeatFor'],
   },
   // Data Category
   'insert-data': {
@@ -751,6 +781,7 @@ export const BLOCK_DEFINITIONS: Record<string, BlockDefinition> = {
       timeout: 10000,
       contentType: 'json',
     },
+    refDataKeys: ['url', 'body'],
   },
   'google-sheets': {
     id: 'google-sheets',
@@ -773,6 +804,7 @@ export const BLOCK_DEFINITIONS: Record<string, BlockDefinition> = {
       dataColumn: '',
       saveData: true,
     },
+    refDataKeys: ['range', 'spreadsheetId'],
   },
 };
 

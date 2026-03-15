@@ -122,7 +122,7 @@ export function BaseNode({ id, data, selected }: NodeProps) {
           rounded-xl bg-white overflow-hidden
           border-2 transition-all duration-100
           ${selected
-            ? "border-amber-500 shadow-[0_0_0_3px_rgba(245,158,11,0.2)] shadow-lg"
+            ? "border-amber-500 shadow-[0_0_0_3px_rgba(245,158,11,0.2)]"
             : "border-gray-200 shadow-md hover:border-gray-300 hover:shadow-lg"
           }
         `}

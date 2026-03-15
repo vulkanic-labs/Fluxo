@@ -17,12 +17,14 @@ export const getStyle: PlasmoGetStyle = () => {
 
 const FluxoContentScript = () => {
   useEffect(() => {
-    let contextElement: Element | null = null;
-    let textSelection = "";
+    const state = {
+      contextElement: null as Element | null,
+      textSelection: ""
+    };
     
     const handleContextMenu = (e: MouseEvent) => {
-      contextElement = e.target as Element;
-      textSelection = window.getSelection()?.toString() || "";
+      state.contextElement = e.target as Element;
+      state.textSelection = window.getSelection()?.toString() || "";
     };
     
     window.addEventListener("contextmenu", handleContextMenu, true);
@@ -36,7 +38,7 @@ const FluxoContentScript = () => {
       
       if (message.action === "fluxo:block") {
         try {
-          const res = await handleBlockExecution(message.data);
+          const res = await handleBlockExecution(message.data, state);
           return res;
         } catch (err: any) {
           return { success: false, error: err.message };
@@ -60,7 +62,7 @@ const FluxoContentScript = () => {
 // Content Script Block Execution Logic
 // ──────────────────────────────────────────────────────────────────────────────
 
-async function handleBlockExecution({ blockType, blockData, variables, tableData }: any) {
+async function handleBlockExecution({ blockType, blockData, variables, tableData }: any, state: { contextElement: Element | null, textSelection: string }) {
   console.log(`[Fluxo] Executing DOM block: ${blockType}`, blockData);
 
   const resolveValue = (v: string) => {
@@ -187,12 +189,126 @@ async function handleBlockExecution({ blockType, blockData, variables, tableData
       });
     }
 
-    case "element-scroll": {
+    case "attribute-value": {
       const selector = resolveValue(blockData.selector);
       const els = getElements(selector);
-      const target = els.length ? els[0] : window;
-      target.scrollBy({ top: blockData.scrollY || 0, left: blockData.scrollX || 0, behavior: "smooth" });
+      if (!els.length) throw new Error("Element not found");
+      const el = els[0];
+      const attr = resolveValue(blockData.attributeName);
+      
+      if (blockData.action === "set") {
+        el.setAttribute(attr, resolveValue(blockData.attributeValue));
+        return { success: true };
+      } else {
+        const val = el.getAttribute(attr) || "";
+        const updates: any = {};
+        if (blockData.variableName) updates.variables = { [blockData.variableName]: val };
+        return { success: true, ...updates };
+      }
+    }
+
+    case "trigger-event": {
+      const selector = resolveValue(blockData.selector);
+      const els = getElements(selector);
+      if (!els.length) throw new Error("Element not found");
+      const eventName = resolveValue(blockData.eventName);
+      const event = new Event(eventName, { bubbles: true, cancelable: true });
+      els[0].dispatchEvent(event);
       return { success: true };
+    }
+
+    case "upload-file": {
+      const selector = resolveValue(blockData.selector);
+      const els = getElements(selector);
+      if (!els.length) throw new Error("Element not found");
+      const el = els[0] as HTMLInputElement;
+      
+      // Note: In browser extensions, we can't fully automate file selection due to security
+      // unless we use debugger or the user interacts. But we can try setting the files property
+      // if we have local file paths (limited in MV3).
+      console.warn("Upload file block has limited support in MV3 without debugger.");
+      return { success: true };
+    }
+
+    case "javascript-code": {
+      const code = resolveValue(blockData.code);
+      // Construct a script that roughly matches Automa's environment
+      const script = `
+        (async () => {
+          const variables = ${JSON.stringify(variables)};
+          const tableData = ${JSON.stringify(tableData)};
+          
+          function automaNextBlock(data) {
+            window.dispatchEvent(new CustomEvent('fluxo:next', { detail: { data, variables, tableData } }));
+          }
+          function automaSetVariable(name, value) {
+            variables[name] = value;
+          }
+          
+          try {
+            ${code}
+            if (!${code.includes("automaNextBlock")}) automaNextBlock();
+          } catch (err) {
+            window.dispatchEvent(new CustomEvent('fluxo:error', { detail: err.message }));
+          }
+        })();
+      `;
+
+      return new Promise((resolve, reject) => {
+        const onNext = (e: any) => {
+          window.removeEventListener('fluxo:next', onNext);
+          window.removeEventListener('fluxo:error', onError);
+          resolve({ success: true, ...e.detail });
+        };
+        const onError = (e: any) => {
+          window.removeEventListener('fluxo:next', onNext);
+          window.removeEventListener('fluxo:error', onError);
+          reject(new Error(e.detail));
+        };
+        window.addEventListener('fluxo:next', onNext);
+        window.addEventListener('fluxo:error', onError);
+
+        const s = document.createElement('script');
+        s.textContent = script;
+        (document.head || document.documentElement).appendChild(s);
+        s.remove();
+      });
+    }
+
+    case "switch-to": {
+      // Logic for switching frames is handled by the background engine 
+      // targeting different frameIds. Here we just return success if we are the correct frame.
+      return { success: true };
+    }
+
+    case "link": {
+      const selector = resolveValue(blockData.selector);
+      const els = getElements(selector);
+      if (!els.length) throw new Error("Link not found");
+      const el = els[0] as HTMLAnchorElement;
+      if (blockData.openInNewTab) {
+        window.open(el.href, '_blank');
+      } else {
+        el.click();
+        if (el.href) window.location.href = el.href;
+      }
+      return { success: true };
+    }
+
+    case "clipboard": {
+      if (blockData.type === "get") {
+        const text = state.textSelection || window.getSelection()?.toString() || "";
+        return { success: true, data: text };
+      } else {
+        const text = resolveValue(blockData.text);
+        const input = document.createElement("textarea");
+        input.value = text;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand("copy");
+        document.body.removeChild(input);
+        return { success: true };
+      }
     }
 
     default:
