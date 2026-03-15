@@ -1,11 +1,24 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "~components/ui/Button";
 import { workflowService } from "~services/WorkflowService";
 import { Workflows } from "./dashboard/Workflows";
+import { WorkflowEditor } from "./dashboard/WorkflowEditor";
 import "~style.css";
 
 function DashboardTab() {
   const [activeTab, setActiveTab] = useState("workflows");
+  const [hash, setHash] = useState(() => typeof window !== 'undefined' ? window.location.hash : "");
+
+  useEffect(() => {
+    const handleHashChange = () => setHash(window.location.hash);
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, []);
+
+  if (hash.startsWith("#/workflows/") && hash.length > 12) {
+    const workflowId = hash.replace("#/workflows/", "");
+    return <WorkflowEditor workflowId={workflowId} />;
+  }
 
   return (
     <div className="flex h-screen bg-gray-50 text-gray-900 font-sans">

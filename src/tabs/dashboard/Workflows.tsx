@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Search, Plus, UploadCloud, Pin, LayoutGrid, ArrowDownAZ, ArrowUpAZ, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { workflowService, type Workflow } from "~services/WorkflowService";
+import { messagingService } from "~services/MessagingService";
 import { WorkflowCard } from "./WorkflowCard";
 import { WorkflowsFolder } from "./WorkflowsFolder";
 
@@ -234,6 +235,8 @@ export function Workflows() {
                         isPinned={true} 
                         onTogglePin={() => togglePin(w.id)}
                         onDelete={() => deleteWorkflow(w.id)}
+                        onExecute={() => messagingService.sendMessage("workflow:execute", { workflowId: w.id })}
+                        onClick={() => window.location.hash = `/workflows/${w.id}`}
                       />
                     ))}
                   </div>
@@ -248,6 +251,8 @@ export function Workflows() {
                     isPinned={false}
                     onTogglePin={() => togglePin(w.id)}
                     onDelete={() => deleteWorkflow(w.id)}
+                    onExecute={() => messagingService.sendMessage("workflow:execute", { workflowId: w.id })}
+                    onClick={() => window.location.hash = `/workflows/${w.id}`}
                   />
                 ))}
               </div>
