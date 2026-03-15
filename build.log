@@ -1,0 +1,10 @@
+
+> fluxo@0.0.1 build D:\Programing\_Fluxo
+> plasmo build "--target=firefox-mv2"
+
+🟣 Plasmo v0.90.5
+🔴 The Browser Extension Framework
+🔵 INFO   | Prepare to bundle the extension...
+🔵 INFO   | Building for target: firefox-mv2
+🔵 INFO   | Loaded environment variables from: []
+🟢 DONE   | Finished in 3688ms!
