@@ -13,7 +13,7 @@ function SelectorInput({ value, onChange, findBy, onFindByChange }: {
       <select
         value={findBy || "cssSelector"}
         onChange={e => onFindByChange(e.target.value)}
-        className="w-full text-xs px-2 py-1.5 mb-1.5 border border-gray-200 rounded-lg bg-gray-50"
+        className="w-full text-xs px-2 py-1.5 mb-1.5 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-colors"
       >
         <option value="cssSelector">CSS Selector</option>
         <option value="xpath">XPath</option>
@@ -160,12 +160,12 @@ export function EditFormsPanel({ data, onChange }: EditPanelProps) {
         <select
           value={data.type || "text-field"}
           onChange={e => onChange({ type: e.target.value })}
-          className="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg"
+          className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-colors"
         >
-          <option value="text-field">Text input</option>
-          <option value="select">Select / Dropdown</option>
-          <option value="checkbox">Checkbox</option>
-          <option value="radio">Radio button</option>
+          <option value="text-field" className="bg-white dark:bg-gray-800">Text input</option>
+          <option value="select" className="bg-white dark:bg-gray-800">Select / Dropdown</option>
+          <option value="checkbox" className="bg-white dark:bg-gray-800">Checkbox</option>
+          <option value="radio" className="bg-white dark:bg-gray-800">Radio button</option>
         </select>
       </FormGroup>
       <SelectorInput
@@ -211,7 +211,7 @@ export function EditJavascriptCodePanel({ data, onChange }: EditPanelProps) {
           value={data.code || ""}
           onChange={e => onChange({ code: e.target.value })}
           rows={10}
-          className="w-full text-xs px-3 py-2 border border-gray-200 rounded-lg bg-gray-900 text-green-400 font-mono focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none"
+          className="w-full text-xs px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-900 text-green-400 font-mono focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none transition-colors"
           placeholder={`console.log("Hello world!");\nautomaNextBlock()`}
         />
       </FormGroup>
@@ -256,7 +256,7 @@ export function EditWebhookPanel({ data, onChange }: EditPanelProps) {
             value={data.body || "{}"}
             onChange={e => onChange({ body: e.target.value })}
             rows={6}
-            className="w-full text-xs px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 font-mono focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none"
+            className="w-full text-xs px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 font-mono focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none transition-colors"
           />
         </FormGroup>
       )}
@@ -284,6 +284,127 @@ export function EditDelayPanel({ data, onChange }: EditPanelProps) {
         <NumberInput value={data.time || 500} onChange={v => onChange({ time: v })} step={100} min={0} />
       </FormGroup>
       <p className="text-xs text-gray-400 mt-1">1000ms = 1 second</p>
+    </div>
+  );
+}
+
+import { workflowService } from "~services/WorkflowService";
+
+export function EditExecuteWorkflowPanel({ data, onChange }: EditPanelProps) {
+  const [workflows, setWorkflows] = React.useState<{ id: string; name: string }[]>([]);
+
+  React.useEffect(() => {
+    const list = workflowService.getWorkflows();
+    setWorkflows(list.map(w => ({ id: w.id, name: w.name })));
+  }, []);
+
+  return (
+    <div>
+      <FormGroup label="Select workflow">
+        <select
+          value={data.workflowId || ""}
+          onChange={e => onChange({ workflowId: e.target.value })}
+          className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 transition-colors"
+        >
+          <option value="" className="bg-white dark:bg-gray-800">Select a workflow...</option>
+          {workflows.map(w => (
+            <option key={w.id} value={w.id} className="bg-white dark:bg-gray-800">{w.name}</option>
+          ))}
+        </select>
+      </FormGroup>
+      <FormGroup label="Global data (JSON - optional)">
+        <textarea
+          value={data.globalData || ""}
+          onChange={e => onChange({ globalData: e.target.value })}
+          rows={5}
+          className="w-full text-xs px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 font-mono focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none transition-colors"
+          placeholder='{"key": "value"}'
+        />
+        <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">Pass initial variables to the child workflow</p>
+      </FormGroup>
+      <div className="mt-4">
+        <FormGroup label="Description (optional)">
+          <TextInput value={data.description || ""} onChange={v => onChange({ description: v })} placeholder="" />
+        </FormGroup>
+      </div>
+    </div>
+  );
+}
+
+export function EditExportDataPanel({ data, onChange }: EditPanelProps) {
+  return (
+    <div>
+      <FormGroup label="Filename">
+        <TextInput value={data.name || ""} onChange={v => onChange({ name: v })} placeholder="export-filename" />
+        <p className="text-[10px] text-gray-400 mt-1">Leave empty to use 'export'</p>
+      </FormGroup>
+      <FormGroup label="Format">
+        <select
+          value={data.type || "json"}
+          onChange={e => onChange({ type: e.target.value })}
+          className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 transition-colors"
+        >
+          <option value="json" className="bg-white dark:bg-gray-800">JSON</option>
+          <option value="csv" className="bg-white dark:bg-gray-800">CSV</option>
+        </select>
+      </FormGroup>
+      <div className="mt-4">
+        <FormGroup label="Description (optional)">
+          <TextInput value={data.description || ""} onChange={v => onChange({ description: v })} placeholder="" />
+        </FormGroup>
+      </div>
+    </div>
+  );
+}
+
+export function EditClipboardPanel({ data, onChange }: EditPanelProps) {
+  return (
+    <div>
+      <FormGroup label="Action">
+        <select
+          value={data.type || "get"}
+          onChange={e => onChange({ type: e.target.value })}
+          className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 transition-colors"
+        >
+          <option value="get" className="bg-white dark:bg-gray-800">Get text</option>
+          <option value="set" className="bg-white dark:bg-gray-800">Set text</option>
+        </select>
+      </FormGroup>
+
+      {data.type === "set" ? (
+        <FormGroup label="Data to copy">
+          <textarea
+            value={data.dataToCopy || ""}
+            onChange={e => onChange({ dataToCopy: e.target.value })}
+            rows={4}
+            className="w-full text-sm px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none transition-colors"
+            placeholder="Text to copy to clipboard..."
+          />
+        </FormGroup>
+      ) : (
+        <div className="space-y-3">
+          <Toggle
+            checked={data.assignVariable || false}
+            onChange={v => onChange({ assignVariable: v })}
+            label="Assign to variable"
+          />
+          {data.assignVariable && (
+            <FormGroup label="Variable name">
+              <TextInput
+                value={data.variableName || ""}
+                onChange={v => onChange({ variableName: v })}
+                placeholder="clipboardValue"
+              />
+            </FormGroup>
+          )}
+        </div>
+      )}
+
+      <div className="mt-4">
+        <FormGroup label="Description (optional)">
+          <TextInput value={data.description || ""} onChange={v => onChange({ description: v })} placeholder="" />
+        </FormGroup>
+      </div>
     </div>
   );
 }

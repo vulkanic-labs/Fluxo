@@ -13,7 +13,12 @@ import {
   Table2,
   Database,
   Settings,
+  Sun,
+  Moon,
+  Undo2,
+  Redo2,
 } from "lucide-react";
+import { useTheme } from "~context/ThemeContext";
 
 export interface ToolbarWorkflow {
   id: string;
@@ -25,6 +30,10 @@ export interface ToolbarWorkflow {
 interface EditorToolbarProps {
   workflow: ToolbarWorkflow;
   isDataChanged: boolean;
+  canUndo?: boolean;
+  canRedo?: boolean;
+  onUndo?: () => void;
+  onRedo?: () => void;
   onBack: () => void;
   onSave: () => void;
   onExecute: () => void;
@@ -46,30 +55,64 @@ export function EditorToolbar({
   onToggleDisabled,
   onToggleTestingMode,
   onOpenModal,
+  onUndo,
+  onRedo,
+  canUndo,
+  canRedo,
 }: EditorToolbarProps) {
   const [showMore, setShowMore] = useState(false);
+  const { theme, toggleTheme } = useTheme();
 
   return (
-    <div className="flex items-center gap-2 px-4 py-2.5 bg-white border-b border-gray-200 shadow-sm shrink-0 relative z-10">
+    <div className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm shrink-0 relative z-10 transition-colors">
       {/* Back */}
       <button
         onClick={onBack}
-        className="p-1.5 text-gray-400 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+        className="p-1.5 text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
         title="Back to workflows"
       >
         <ArrowLeft size={18} />
       </button>
 
-      <div className="w-px h-5 bg-gray-200 mx-0.5" />
+      <div className="w-px h-5 bg-gray-200 dark:bg-gray-800 mx-0.5" />
+
+      {/* Undo / Redo */}
+      <div className="flex items-center gap-0.5">
+        <IconButton 
+          icon={<Undo2 size={16} />} 
+          title="Undo (Ctrl+Z)" 
+          onClick={() => onUndo?.()} 
+          disabled={!canUndo} 
+        />
+        <IconButton 
+          icon={<Redo2 size={16} />} 
+          title="Redo (Ctrl+Shift+Z)" 
+          onClick={() => onRedo?.()} 
+          disabled={!canRedo} 
+        />
+      </div>
+
+      <div className="w-px h-5 bg-gray-200 dark:bg-gray-800 mx-0.5" />
 
       {/* Workflow name + unsaved indicator */}
       <div className="flex items-center gap-2 flex-1 min-w-0">
         <span className={`w-2 h-2 rounded-full shrink-0 ${isDataChanged ? "bg-amber-400 animate-pulse" : "bg-emerald-400"}`} />
-        <h2 className="text-sm font-semibold text-gray-800 truncate">{workflow.name}</h2>
+        <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate">{workflow.name}</h2>
         {workflow.isDisabled && (
-          <span className="px-1.5 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-500 rounded">Disabled</span>
+          <span className="px-1.5 py-0.5 text-[10px] font-medium bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded">Disabled</span>
         )}
       </div>
+
+      {/* Theme Toggle */}
+      <button
+        onClick={toggleTheme}
+        className="p-1.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+        title={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
+      >
+        {theme === "light" ? <Moon size={16} /> : <Sun size={16} />}
+      </button>
+
+      <div className="w-px h-5 bg-gray-200 dark:bg-gray-800 mx-0.5" />
 
       {/* Modal Actions */}
       <div className="hidden md:flex items-center gap-1">
@@ -116,7 +159,7 @@ export function EditorToolbar({
         {showMore && (
           <>
             <div className="fixed inset-0 z-40" onClick={() => setShowMore(false)} />
-            <div className="absolute right-0 top-8 z-50 bg-white border border-gray-200 rounded-xl shadow-lg w-48 py-1 overflow-hidden">
+            <div className="absolute right-0 top-8 z-50 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl shadow-lg w-48 py-1 overflow-hidden">
               <MenuItem
                 icon={<Edit2 size={14} />}
                 label="Rename"
@@ -132,11 +175,11 @@ export function EditorToolbar({
                 label={workflow.isDisabled ? "Enable" : "Disable"}
                 onClick={() => { setShowMore(false); onToggleDisabled(); }}
               />
-              <div className="my-1 border-t border-gray-100" />
+              <div className="my-1 border-t border-gray-100 dark:border-gray-800" />
               <MenuItem
                 icon={<Trash2 size={14} />}
                 label="Delete workflow"
-                className="text-red-500 hover:bg-red-50"
+                className="text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
                 onClick={() => { setShowMore(false); onDelete(); }}
               />
             </div>
@@ -161,12 +204,17 @@ export function EditorToolbar({
   );
 }
 
-function IconButton({ icon, title, onClick }: { icon: React.ReactNode; title: string; onClick: () => void }) {
+function IconButton({ icon, title, onClick, disabled }: { icon: React.ReactNode; title: string; onClick: () => void; disabled?: boolean }) {
   return (
     <button
       onClick={onClick}
       title={title}
-      className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+      disabled={disabled}
+      className={`p-1.5 rounded-lg transition-colors ${
+        disabled 
+          ? "text-gray-200 dark:text-gray-800 cursor-not-allowed" 
+          : "text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
+      }`}
     >
       {icon}
     </button>
@@ -182,9 +230,9 @@ function MenuItem({ icon, label, onClick, className = "" }: {
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-gray-50 transition-colors ${className || "text-gray-700"}`}
+      className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${className || "text-gray-700 dark:text-gray-300"}`}
     >
-      <span className="text-gray-400">{icon}</span>
+      <span className="text-gray-400 dark:text-gray-500">{icon}</span>
       {label}
     </button>
   );

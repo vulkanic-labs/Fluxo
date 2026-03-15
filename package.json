@@ -51,7 +51,10 @@
       "offscreen",
       "webNavigation",
       "unlimitedStorage",
-      "scripting"
+      "scripting",
+      "notifications",
+      "downloads",
+      "cookies"
     ],
     "browser_specific_settings": {
       "gecko": {

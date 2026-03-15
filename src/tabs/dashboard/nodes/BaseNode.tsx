@@ -1,17 +1,17 @@
 import React, { useState, useCallback } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { Pencil, Trash2, Settings2, Play, CheckCircle2 } from "lucide-react";
+import { Pencil, Trash2, Settings2, Play, CheckCircle2, Link2Off } from "lucide-react";
 import { BLOCK_DEFINITIONS } from "../editor/data/blocks";
 import { useEditorActions } from "../editor/EditorActionsContext";
 
 // Category visual config
 const CATEGORY_STYLES: Record<string, { band: string; dot: string }> = {
-  general:        { band: "bg-amber-50 text-amber-700 border-b border-amber-200",   dot: "bg-amber-400" },
-  browser:        { band: "bg-blue-50 text-blue-700 border-b border-blue-200",      dot: "bg-blue-400" },
-  interaction:    { band: "bg-purple-50 text-purple-700 border-b border-purple-200", dot: "bg-purple-400" },
-  conditions:     { band: "bg-emerald-50 text-emerald-700 border-b border-emerald-200", dot: "bg-emerald-400" },
-  data:           { band: "bg-rose-50 text-rose-700 border-b border-rose-200",      dot: "bg-rose-400" },
-  onlineServices: { band: "bg-cyan-50 text-cyan-700 border-b border-cyan-200",      dot: "bg-cyan-400" },
+  general:        { band: "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-b border-amber-200 dark:border-amber-900/30",   dot: "bg-amber-400" },
+  browser:        { band: "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border-b border-blue-200 dark:border-blue-900/30",      dot: "bg-blue-400" },
+  interaction:    { band: "bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400 border-b border-purple-200 dark:border-purple-900/30", dot: "bg-purple-400" },
+  conditions:     { band: "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border-b border-emerald-200 dark:border-emerald-900/30", dot: "bg-emerald-400" },
+  data:           { band: "bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-400 border-b border-rose-200 dark:border-rose-900/30",      dot: "bg-rose-400" },
+  onlineServices: { band: "bg-cyan-50 dark:bg-cyan-900/20 text-cyan-700 dark:text-cyan-400 border-b border-cyan-200 dark:border-cyan-900/30",      dot: "bg-cyan-400" },
 };
 
 const CATEGORY_NAMES: Record<string, string> = {
@@ -31,7 +31,8 @@ export function BaseNode({ id, data, selected }: NodeProps) {
   const [copied, setCopied] = useState(false);
 
   // Get actions from context — the correct React pattern to avoid stale callbacks
-  const { onEdit, onDelete, onRunFrom } = useEditorActions();
+  const { onEdit, onDelete, onRunFrom, onClearConnections, executingNodeId } = useEditorActions();
+  const isExecuting = executingNodeId === id;
 
   const nodeData = data as FluxoNodeData;
   const blockDef = BLOCK_DEFINITIONS[nodeData.label];
@@ -61,6 +62,11 @@ export function BaseNode({ id, data, selected }: NodeProps) {
     onRunFrom?.(id);
   }, [id, onRunFrom]);
 
+  const handleClearConnections = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    onClearConnections?.(id);
+  }, [id, onClearConnections]);
+
   return (
     <div
       className={`relative select-none transition-opacity ${isDisabled ? "opacity-40" : ""}`}
@@ -68,6 +74,11 @@ export function BaseNode({ id, data, selected }: NodeProps) {
       onMouseEnter={() => setShowMenu(true)}
       onMouseLeave={() => setShowMenu(false)}
     >
+      {/* Execution Indicator Pulse */}
+      {isExecuting && (
+        <div className="absolute -inset-1 bg-amber-500/20 rounded-2xl animate-pulse -z-10 blur-sm" />
+      )}
+
       {/* Hover toolbar — appears above node */}
       <div
         className={`
@@ -88,12 +99,12 @@ export function BaseNode({ id, data, selected }: NodeProps) {
             {copied ? "Copied!" : `#${id.slice(-6)}`}
           </button>
 
-          <div className="flex items-center bg-gray-900 shadow-md shadow-gray-900/10 rounded-md overflow-hidden">
+          <div className="flex items-center bg-gray-900 dark:bg-gray-800 shadow-md shadow-gray-900/10 rounded-md overflow-hidden ring-1 ring-white/10">
             {!blockDef?.disableEdit && (
               <button
                 title="Edit block"
                 onClick={handleEdit}
-                className="p-1.5 text-gray-300 hover:text-blue-300 hover:bg-gray-800 transition-colors"
+                className="p-1.5 text-gray-300 hover:text-blue-300 hover:bg-gray-800 dark:hover:bg-gray-700 transition-colors"
               >
                 <Pencil size={13} />
               </button>
@@ -101,14 +112,21 @@ export function BaseNode({ id, data, selected }: NodeProps) {
             <button
               title="Run from this block"
               onClick={handleRun}
-              className="p-1.5 text-gray-300 hover:text-emerald-300 hover:bg-gray-800 transition-colors border-l border-gray-700"
+              className="p-1.5 text-gray-300 hover:text-emerald-300 hover:bg-gray-800 dark:hover:bg-gray-700 transition-colors border-l border-gray-700 dark:border-gray-600"
             >
               <Play size={13} />
             </button>
             <button
+              title="Disconnect all connections"
+              onClick={handleClearConnections}
+              className="p-1.5 text-gray-300 hover:text-amber-400 hover:bg-gray-800 dark:hover:bg-gray-700 transition-colors border-l border-gray-700 dark:border-gray-600"
+            >
+              <Link2Off size={13} />
+            </button>
+            <button
               title="Delete block"
               onClick={handleDelete}
-              className="p-1.5 text-gray-300 hover:text-red-400 hover:bg-gray-800 transition-colors border-l border-gray-700"
+              className="p-1.5 text-gray-300 hover:text-red-400 hover:bg-gray-800 dark:hover:bg-gray-700 transition-colors border-l border-gray-700 dark:border-gray-600"
             >
               <Trash2 size={13} />
             </button>
@@ -119,11 +137,13 @@ export function BaseNode({ id, data, selected }: NodeProps) {
       {/* Node card */}
       <div
         className={`
-          rounded-xl bg-white overflow-hidden
+          rounded-xl bg-white dark:bg-gray-800 overflow-hidden
           border-2 transition-all duration-100
-          ${selected
-            ? "border-amber-500 shadow-[0_0_0_3px_rgba(245,158,11,0.2)]"
-            : "border-gray-200 shadow-md hover:border-gray-300 hover:shadow-lg"
+          ${isExecuting 
+            ? "border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.4)]" 
+            : selected
+              ? "border-amber-500 shadow-[0_0_0_3px_rgba(245,158,11,0.2)]"
+              : "border-gray-200 dark:border-gray-700 shadow-md hover:border-gray-300 dark:hover:border-gray-600 hover:shadow-lg"
           }
         `}
         onDoubleClick={handleEdit}
@@ -138,11 +158,11 @@ export function BaseNode({ id, data, selected }: NodeProps) {
 
         {/* Body */}
         <div className="px-3 py-3">
-          <p className="text-sm font-semibold text-gray-800 leading-tight">{blockName}</p>
+          <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 leading-tight">{blockName}</p>
           {nodeData.description ? (
-            <p className="text-[11px] text-gray-400 mt-1 truncate">{nodeData.description}</p>
+            <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1 truncate">{nodeData.description}</p>
           ) : (
-            <p className="text-[11px] text-gray-300 mt-1">Double-click to configure</p>
+            <p className="text-[11px] text-gray-300 dark:text-gray-600 mt-1">Double-click to configure</p>
           )}
         </div>
 

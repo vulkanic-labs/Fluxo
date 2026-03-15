@@ -11,6 +11,9 @@ export {
   EditJavascriptCodePanel,
   EditWebhookPanel,
   EditDelayPanel,
+  EditExecuteWorkflowPanel,
+  EditExportDataPanel,
+  EditClipboardPanel,
   GenericEditPanel,
   SelectorInput,
 } from "./EditForms";

@@ -61,7 +61,7 @@ export function EditorSidebar({ workflow, onUpdateWorkflow }: EditorSidebarProps
   }, []);
 
   const onDragStart = useCallback((e: React.DragEvent, block: BlockDefinition) => {
-    e.dataTransfer.setData("application/reactflow/blockId", block.id);
+    e.dataTransfer.setData("application/reactflow", block.id);
     e.dataTransfer.effectAllowed = "move";
   }, []);
 
@@ -74,28 +74,28 @@ export function EditorSidebar({ workflow, onUpdateWorkflow }: EditorSidebarProps
     .filter(b => filterBlocks([b]).length > 0);
 
   return (
-    <div className="h-full flex flex-col bg-white border-r border-gray-200">
+    <div className="h-full flex flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 transition-colors">
       {/* Workflow Header */}
-      <div className="px-4 py-4 border-b border-gray-100 shrink-0">
-        <h2 className="text-sm font-bold text-gray-800 truncate" title={workflow.name}>
+      <div className="px-4 py-4 border-b border-gray-100 dark:border-gray-800 shrink-0">
+        <h2 className="text-sm font-bold text-gray-800 dark:text-gray-100 truncate" title={workflow.name}>
           {workflow.name}
         </h2>
         {workflow.description && (
-          <p className="text-xs text-gray-400 mt-0.5 truncate">{workflow.description}</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate">{workflow.description}</p>
         )}
       </div>
 
       {/* Search */}
-      <div className="px-3 py-2.5 border-b border-gray-100 shrink-0">
+      <div className="px-3 py-2.5 border-b border-gray-100 dark:border-gray-800 shrink-0">
         <div className="relative">
-          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
           <input
             ref={searchRef}
             type="search"
             value={query}
             onChange={e => setQuery(e.target.value)}
             placeholder="Search blocks... (Ctrl+F)"
-            className="w-full text-sm pl-8 pr-3 py-2 border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+            className="w-full text-sm pl-8 pr-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors"
           />
         </div>
       </div>
@@ -155,14 +155,14 @@ function BlockCategory({ name, color, blocks, pinnedBlocks, onPin, onDragStart, 
   return (
     <div className="mb-1">
       <button
-        className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-gray-50 transition-colors"
+        className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
         onClick={onToggle}
       >
         <span className={`text-xs font-semibold uppercase tracking-wider ${color.split(' ').filter(c => c.startsWith('text-')).join(' ')}`}>
           {name}
         </span>
         <div className="flex items-center gap-1">
-          <span className="text-xs text-gray-400">{blocks.length}</span>
+          <span className="text-xs text-gray-400 dark:text-gray-500">{blocks.length}</span>
           {collapsed ? <ChevronRight size={12} className="text-gray-400" /> : <ChevronDown size={12} className="text-gray-400" />}
         </div>
       </button>
@@ -200,12 +200,12 @@ function BlockItem({ block, isPinned, onPin, onDragStart }: BlockItemProps) {
       onDragStart={e => onDragStart(e, block)}
       onMouseEnter={() => setShowPinBtn(true)}
       onMouseLeave={() => setShowPinBtn(false)}
-      className="group flex items-center gap-2.5 px-2.5 py-2 rounded-lg border border-transparent hover:border-amber-300 hover:bg-amber-50 cursor-grab active:cursor-grabbing transition-all"
+      className="group flex items-center gap-2.5 px-2.5 py-2 rounded-lg border border-transparent hover:border-amber-300 dark:hover:border-amber-700 hover:bg-amber-50 dark:hover:bg-amber-900/20 cursor-grab active:cursor-grabbing transition-all"
     >
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium text-gray-700 leading-tight truncate">{block.name}</p>
+        <p className="text-xs font-medium text-gray-700 dark:text-gray-200 leading-tight truncate">{block.name}</p>
         {block.description && (
-          <p className="text-[10px] text-gray-400 truncate mt-0.5">{block.description}</p>
+          <p className="text-[10px] text-gray-400 dark:text-gray-500 truncate mt-0.5">{block.description}</p>
         )}
       </div>
       {(showPinBtn || isPinned) && (

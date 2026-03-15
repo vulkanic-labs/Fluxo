@@ -233,12 +233,19 @@ const executors: Record<string, BlockExecutor> = {
   },
 
   notification: async (data, ctx) => {
-    await browser.notifications.create({
-      type: "basic",
-      iconUrl: browser.runtime.getURL("assets/icon.png"),
+    const notificationOptions = {
+      type: "basic" as const,
+      iconUrl: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAACvElEQVR4nO2Yv2sUQRTHP7O7e7mYmD9AIn9AENCEYClpAoqFlYWFpYVgoYVNiiCOvSByiSBaWIidYmERUQsL7S0shIhgE60S0SREv9y7vYvFm9u9u927vY9duH0DA8vO7ps3n3nzZt57M6pUqVKlSpUqVaro6nQ6u9M0vSsiH6MoWpVSbtm2veK99yJyV0Tux3H8SkSe9/v9p8vLy6u9Xm89vXfLsqpRFG1Vq9XvRLQfRdGBlPILXfjeX3DOfXHO3atWqw9F5InWukopv0sp97XWV8Y5B6C1vtrv9+81Go2D6On6/f6+iDwwDIPz6L0XkYf1ev2R9/6yc+621vqi1nrN99I7Hcex7L0Xkd/OuRvOuS/OuXtJkrwfHB8A7/1FEXkSRdGW1vrK8HiXUsqMAn7vXfLeuzAMFxeE/yKl/D64fndkPEnI5zO+UfBz773LwzBcXBD+m5RyMv6C6/dExs8S8PmMLxT83DknTNM0I6OnmI/T6eym8D/j6T6O4y3v/cX0+WfD60nAn06ff0vBn0+ffyDiz0fGzwN+Pv0Fv8i6iXkL/p8m5ovAn4+M92XGfUa+UDAz9Lp7InLf9KOf9VhrXSX7OfvRzXpijO+HAnzD/5GIPzN68C/IeH8gwPezC/C97PnXInI/vfc7InI/veY3InI/vfcHInI/vffHIvIone59InIone69InIone4DIvIoOed9InIoceccmRlz7z2AGRkfRM75BfA9Y86G9/4C+JnxZ8Ofvzd68GfDn0+ffy/gz0fGzwN+Pv0lBX8+fc6vE/PnS8L/m/F77Wdm/H9OQp+R7xfMDL3unIh8SGN8SGN8SGN8SGP8/8G318vLyz9ardYeRjG5XC73z7IsTNM0Y5GMMf6x977rnNscvG4Y5xyjWfH28vLy6uD4P3M0GgfG7yZJ8t45dz+9puvZtm0VRdGW1vpsHMevAHzvXfbe98/6Dx6L1N0RkZcAAAAASUVORK5CYII=", // Fluxo placeholder icon
       title: data.title || "Fluxo",
       message: data.message || "",
-    });
+    };
+
+    try {
+      await browser.notifications.create(notificationOptions);
+    } catch (err) {
+      console.warn("[WorkflowEngine] Notification failed with icon, trying without icon:", err);
+      await browser.notifications.create({ ...notificationOptions, iconUrl: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" });
+    }
     return { success: true, nextOutput: "output" };
   },
 
@@ -393,36 +400,38 @@ const executors: Record<string, BlockExecutor> = {
 async function testBasicConditions(conditions: any[], ctx: ExecutionContext): Promise<boolean> {
   if (!conditions || !conditions.length) return false;
   
+  const comparisons: Record<string, (a: any, b: any) => boolean> = {
+    eq: (a, b) => String(a) === String(b),
+    nq: (a, b) => String(a) !== String(b),
+    gt: (a, b) => Number(a) > Number(b),
+    gte: (a, b) => Number(a) >= Number(b),
+    lt: (a, b) => Number(a) < Number(b),
+    lte: (a, b) => Number(a) <= Number(b),
+    cnt: (a, b) => String(a).includes(String(b)),
+    rgx: (a, b) => new RegExp(String(b)).test(String(a)),
+  };
+
   for (const group of conditions) {
     let groupMatch = true;
     const items = group.items || [];
     
-    // Each group is an AND of its items
     for (const item of items) {
-      const { type, data } = item;
-      let valA: any = "";
-      let valB: any = "";
-      
-      if (type === 'value') {
-        valA = item.value; // Already templated by engine
-        // We need a way to get the comparison operator and second value
-        // For now, let's assume item has 'operator' and 'compareValue'
-        const operator = item.operator || 'eq';
-        valB = item.compareValue;
-        
-        switch (operator) {
-          case 'eq': groupMatch = valA === valB; break;
-          case 'nq': groupMatch = valA !== valB; break;
-          case 'cnt': groupMatch = String(valA).includes(String(valB)); break;
-          case 'rgx': groupMatch = new RegExp(valB).test(String(valA)); break;
-          default: groupMatch = valA === valB;
-        }
+      if (item.category === 'compare') continue; // Not a value item
+
+      const valA = item.data?.value; 
+      // In Fluxo, the engine templates the block data BEFORE calling the executor.
+      // So variables like {{myVar}} are already resolved in valA.
+
+      const prevItem = items[items.indexOf(item) - 1];
+      const operator = prevItem?.type || 'eq';
+      const valB = ctx.variables[item.data?.variableName] || item.data?.value;
+
+      const result = comparisons[operator]?.(valA, valB) ?? (valA === valB);
+      if (!result) {
+        groupMatch = false;
+        break;
       }
-      
-      if (!groupMatch) break;
     }
-    
-    // Any group matching means the whole condition is true (OR between groups)
     if (groupMatch && items.length > 0) return true;
   }
   return false;
@@ -450,6 +459,9 @@ export async function executeWorkflow(
   };
 
   const logId = await logService.startLog(workflowId, drawflow.nodes.find(n => n.data.label === "trigger")?.data.label || "Workflow");
+
+  // Broadcast start
+  browser.runtime.sendMessage({ action: "fluxo:execution-started", payload: { workflowId } }).catch(() => {});
 
   const nodeMap = new Map(drawflow.nodes.map(n => [n.id, n]));
   const edgeMap = new Map<string, NodeEdge[]>();
@@ -485,6 +497,12 @@ export async function executeWorkflow(
       console.warn(`[WorkflowEngine] Node ${currentNodeId} not found in map.`);
       break;
     }
+
+    // Broadcast current node
+    browser.runtime.sendMessage({ 
+      action: "fluxo:node-executing", 
+      payload: { workflowId, nodeId: currentNodeId } 
+    }).catch(() => {});
 
     const blockType = node.data.label;
     console.log(`[WorkflowEngine] Step ${steps}: Executing ${blockType} (${node.id})`);
@@ -554,6 +572,10 @@ export async function executeWorkflow(
   }
 
   await logService.finishLog(logId, steps < MAX_STEPS ? 'success' : 'error', steps >= MAX_STEPS ? 'Max steps reached' : undefined);
+  
+  // Broadcast stop
+  browser.runtime.sendMessage({ action: "fluxo:execution-stopped", payload: { workflowId } }).catch(() => {});
+  
   console.log(`[WorkflowEngine] Finished workflow ${workflowId} in ${steps} steps`);
 }
 
