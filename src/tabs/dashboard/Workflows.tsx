@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Search, Plus, UploadCloud, Pin, LayoutGrid, ArrowDownAZ, ArrowUpAZ, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Plus, UploadCloud, Pin, LayoutGrid, ArrowDownAZ, ArrowUpAZ, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { workflowService, type Workflow } from "~services/WorkflowService";
 import { WorkflowCard } from "./WorkflowCard";
 import { WorkflowsFolder } from "./WorkflowsFolder";
@@ -18,6 +18,11 @@ export function Workflows() {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [currentPage, setCurrentPage] = useState(1);
   const [perPage, setPerPage] = useState(18);
+
+  // New Workflow Modal
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [newWorkflowName, setNewWorkflowName] = useState("");
+  const [newWorkflowDesc, setNewWorkflowDesc] = useState("");
 
   useEffect(() => {
     async function load() {
@@ -74,12 +79,15 @@ export function Workflows() {
   const unpinnedWorkflows = paginatedWorkflows.filter(w => !pinnedIds.includes(w.id));
 
   const createWorkflow = async () => {
-    const id = Date.now().toString();
+    if (!newWorkflowName.trim()) return;
+
+    const id = Date.now().toString(); // Use nanoid in the future
     await workflowService.insertWorkflow({
       id,
-      name: "Untitled Workflow",
+      name: newWorkflowName.trim(),
+      description: newWorkflowDesc.trim(),
       icon: "riGlobalLine",
-      folderId: null,
+      folderId: activeFolderId,
       content: {},
       drawflow: null,
       createdAt: Date.now(),
@@ -88,10 +96,16 @@ export function Workflows() {
       settings: {},
       version: "0.0.1",
       globalData: "",
-      description: "" // Assuming we add description in type later
     } as any);
     
     setWorkflows(workflowService.getWorkflows());
+    setIsModalOpen(false);
+    setNewWorkflowName("");
+    setNewWorkflowDesc("");
+    
+    // In the legacy extension, this navigates to the builder `/#/workflows/${id}`
+    // For now, we update hash to navigate. You may adapt depending on your router.
+    window.location.hash = `/workflows/${id}`;
   };
 
   const deleteWorkflow = async (id: string) => {
@@ -174,7 +188,7 @@ export function Workflows() {
         
         <button 
           className="flex items-center px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-medium transition-colors shadow-sm"
-          onClick={createWorkflow}
+          onClick={() => setIsModalOpen(true)}
         >
           <Plus size={18} className="mr-2" />
           New Workflow
@@ -197,7 +211,7 @@ export function Workflows() {
             <p className="text-gray-500 mb-8">Create your first workflow or import one from the marketplace to get started automating your processes.</p>
             <button 
               className="inline-flex items-center px-6 py-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-medium transition-colors shadow-sm"
-              onClick={createWorkflow}
+              onClick={() => setIsModalOpen(true)}
             >
               <Plus size={20} className="mr-2" />
               Build a Workflow
@@ -279,6 +293,65 @@ export function Workflows() {
           )}
         </div>
       </div>
+
+      {/* New Workflow Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden transform transition-all p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-xl font-semibold text-gray-800">New Workflow</h3>
+              <button 
+                onClick={() => setIsModalOpen(false)}
+                className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <input
+                  type="text"
+                  placeholder="Name"
+                  autoFocus
+                  value={newWorkflowName}
+                  onChange={e => setNewWorkflowName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && createWorkflow()}
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all shadow-sm"
+                />
+              </div>
+              
+              <div>
+                <textarea
+                  placeholder="Description"
+                  value={newWorkflowDesc}
+                  onChange={e => setNewWorkflowDesc(e.target.value.substring(0, 300))}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all shadow-sm resize-none h-32"
+                />
+                <div className="text-right mt-1 text-xs text-gray-400 font-medium font-mono">
+                  {newWorkflowDesc.length}/300
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6 pt-2">
+                <button 
+                  onClick={() => setIsModalOpen(false)}
+                  className="flex-1 px-4 py-2.5 bg-white border border-gray-200 text-gray-700 font-medium rounded-xl hover:bg-gray-50 transition-colors shadow-sm"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={createWorkflow}
+                  disabled={!newWorkflowName.trim()}
+                  className="flex-1 px-4 py-2.5 bg-amber-600 text-white font-medium rounded-xl hover:bg-amber-700 transition-colors shadow-sm disabled:opacity-50 disabled:hover:bg-amber-600"
+                >
+                  Create
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
