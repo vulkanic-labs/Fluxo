@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Button } from "~components/ui/Button";
 import { workflowService } from "~services/WorkflowService";
+import { Workflows } from "./dashboard/Workflows";
 import "~style.css";
 
 function DashboardTab() {
@@ -33,24 +34,22 @@ function DashboardTab() {
       {/* Main Content */}
       <main className="flex-1 overflow-auto p-8">
         <div className="max-w-6xl mx-auto">
-          <header className="mb-8 flex justify-between items-center">
+          <header className="mb-6 flex justify-between items-center">
             <h2 className="text-3xl font-semibold capitalize text-gray-800">
               {activeTab}
             </h2>
-            {activeTab === "workflows" && (
-              <Button>+ New Workflow</Button>
-            )}
           </header>
 
-          <section className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 min-h-[400px] flex items-center justify-center">
-            <div className="text-center">
-              <p className="text-gray-500 mb-4">{activeTab} logic is migrating to Fluxo Architecture...</p>
-              {activeTab === "workflows" && (
-                <Button variant="secondary" onClick={() => console.log(workflowService.getWorkflows())}>
-                  Refresh Workflows
-                </Button>
-              )}
-            </div>
+          <section className="h-[calc(100vh-140px)]">
+            {activeTab === "workflows" ? (
+              <Workflows />
+            ) : (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 min-h-[400px] flex items-center justify-center">
+                <div className="text-center">
+                  <p className="text-gray-500 mb-4">{activeTab} logic is migrating to Fluxo Architecture...</p>
+                </div>
+              </div>
+            )}
           </section>
         </div>
       </main>

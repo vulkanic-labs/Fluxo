@@ -14,6 +14,7 @@ export interface Workflow {
   settings: any;
   version: string;
   globalData: string;
+  description?: string;
 }
 
 class WorkflowService extends BaseService {
