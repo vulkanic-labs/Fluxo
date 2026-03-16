@@ -126,6 +126,7 @@ export function EditorCanvas({
         onDrop={onDrop}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
+        colorMode={theme}
         fitView
         snapToGrid
         snapGrid={[12, 12]}
@@ -146,7 +147,10 @@ export function EditorCanvas({
         />
         <Controls
           showInteractive
-          className="!border !border-gray-200 dark:!border-gray-700 !rounded-xl !shadow-sm !bg-white dark:!bg-gray-800 dark:!text-gray-300"
+          className="!bg-white dark:!bg-slate-900 !border-gray-200 dark:!border-slate-800 !shadow-lg !rounded-xl overflow-hidden"
+          style={{ 
+            fill: theme === "dark" ? "#94a3b8" : "#64748b",
+          }}
         />
         <MiniMap
           nodeColor={(n) => {
@@ -156,11 +160,16 @@ export function EditorCanvas({
               data: "#fecaca", onlineServices: "#a5f3fc",
             };
             const cat = BLOCK_DEFINITIONS[n.data?.label as string]?.category;
-            return colors[cat || "general"] || "#e5e7eb";
+            const baseColor = colors[cat || "general"] || "#e5e7eb";
+            return theme === "dark" ? baseColor : baseColor; // Keeping original colors for now
           }}
+          nodeStrokeWidth={3}
+          nodeStrokeColor={theme === "dark" ? "#ffffff20" : "#00000010"}
           nodeBorderRadius={8}
-          maskColor={theme === "dark" ? "rgba(15, 23, 42, 0.7)" : "rgba(248, 250, 252, 0.85)"}
-          className="!border !border-gray-200 dark:!border-gray-700 !rounded-xl !shadow-sm !bg-white/90 dark:!bg-gray-800/90"
+          maskColor={theme === "dark" ? "rgba(2, 6, 23, 0.7)" : "rgba(248, 250, 252, 0.85)"}
+          maskStrokeColor={theme === "dark" ? "#f59e0b" : "#f59e0b"}
+          maskStrokeWidth={2}
+          className="!bg-white dark:!bg-slate-800 !border-gray-200 dark:!border-slate-700 !shadow-xl !rounded-xl"
         />
       </ReactFlow>
     </EditorActionsContext.Provider>

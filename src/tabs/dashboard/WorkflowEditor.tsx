@@ -233,10 +233,45 @@ function EditorInner({ workflowId }: WorkflowEditorProps) {
     setWorkflow(prev => prev ? { ...prev, isDisabled } : null);
   }, [workflow]);
 
+  // ─── Resizable Panels ──────────────────────────────────────────────────────────
+  const [leftSidebarWidth, setLeftSidebarWidth] = useState(224);
+  const [rightSidebarWidth, setRightSidebarWidth] = useState(320);
+  const [isResizingLeft, setIsResizingLeft] = useState(false);
+  const [isResizingRight, setIsResizingRight] = useState(false);
+
+  const startResizingLeft = useCallback(() => setIsResizingLeft(true), []);
+  const startResizingRight = useCallback(() => setIsResizingRight(true), []);
+
+  useEffect(() => {
+    if (!isResizingLeft && !isResizingRight) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isResizingLeft) {
+        setLeftSidebarWidth(Math.max(160, Math.min(400, e.clientX)));
+      } else if (isResizingRight) {
+        setRightSidebarWidth(Math.max(240, Math.min(600, window.innerWidth - e.clientX)));
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingLeft(false);
+      setIsResizingRight(false);
+      // Force React Flow to recalculate its dimensions if needed
+      window.dispatchEvent(new Event('resize'));
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isResizingLeft, isResizingRight]);
+
   // ─── Loading / Not found ─────────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div className="fixed inset-0 z-50 bg-[#f8fafc] dark:bg-gray-950 flex items-center justify-center transition-colors">
+      <div className="fixed inset-0 z-50 bg-[#f8fafc] dark:bg-gray-950 flex items-center justify-center">
         <div className="text-center">
           <div className="w-9 h-9 border-[3px] border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Loading workflow...</p>
@@ -259,7 +294,7 @@ function EditorInner({ workflowId }: WorkflowEditorProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-[#f8fafc] dark:bg-gray-950 font-sans antialiased transition-colors">
+    <div className={`fixed inset-0 z-50 flex flex-col bg-[#f8fafc] dark:bg-gray-950 font-sans antialiased transition-colors ${isResizingLeft || isResizingRight ? 'select-none' : ''}`}>
       {/* Top Toolbar */}
       <EditorToolbar
         workflow={{
@@ -283,10 +318,18 @@ function EditorInner({ workflowId }: WorkflowEditorProps) {
         onOpenModal={(id) => console.log("Modal:", id)}
       />
 
-      <div className="flex flex-1 min-h-0">
-        <aside className="w-56 shrink-0 flex flex-col overflow-hidden">
+      <div className="flex flex-1 min-h-0 relative">
+        <aside style={{ width: leftSidebarWidth }} className="shrink-0 flex flex-col overflow-hidden">
           <EditorSidebar workflow={{ name: workflow.name, description: workflow.description || "" }} />
         </aside>
+
+        {/* Left Resize Handle */}
+        <div 
+          onMouseDown={startResizingLeft} 
+          className="w-1.5 shrink-0 cursor-col-resize hover:bg-amber-500/50 active:bg-amber-500 transition-colors z-20 group relative"
+        >
+          <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-[1px] bg-gray-200 dark:bg-gray-800 group-hover:bg-transparent" />
+        </div>
 
         <main className="flex-1 relative min-w-0">
           <EditorCanvas
@@ -303,15 +346,25 @@ function EditorInner({ workflowId }: WorkflowEditorProps) {
         </main>
 
         {editingBlock && (
-          <aside className="w-80 shrink-0 flex flex-col overflow-hidden">
-            <BlockEditPanel
-              nodeId={editingBlock.nodeId}
-              blockTypeId={editingBlock.blockTypeId}
-              data={editingBlock.data}
-              onClose={() => setEditingBlock(null)}
-              onUpdate={handleUpdateNodeData}
-            />
-          </aside>
+          <>
+            {/* Right Resize Handle */}
+            <div 
+              onMouseDown={startResizingRight} 
+              className="w-1.5 shrink-0 cursor-col-resize hover:bg-amber-500/50 active:bg-amber-500 transition-colors z-20 group relative"
+            >
+               <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-[1px] bg-gray-200 dark:bg-gray-800 group-hover:bg-transparent" />
+            </div>
+            
+            <aside style={{ width: rightSidebarWidth }} className="shrink-0 flex flex-col overflow-hidden relative">
+              <BlockEditPanel
+                nodeId={editingBlock.nodeId}
+                blockTypeId={editingBlock.blockTypeId}
+                data={editingBlock.data}
+                onClose={() => setEditingBlock(null)}
+                onUpdate={handleUpdateNodeData}
+              />
+            </aside>
+          </>
         )}
       </div>
 
@@ -400,10 +453,8 @@ function Modal({ title, children, onClose }: { title: string; children: React.Re
 
 export function WorkflowEditor({ workflowId }: WorkflowEditorProps) {
   return (
-    <ThemeProvider>
-      <ReactFlowProvider>
-        <EditorInner workflowId={workflowId} />
-      </ReactFlowProvider>
-    </ThemeProvider>
+    <ReactFlowProvider>
+      <EditorInner workflowId={workflowId} />
+    </ReactFlowProvider>
   );
 }

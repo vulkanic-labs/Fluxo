@@ -40,3 +40,4 @@ keys.json
 
 .agent/*
 old/
+dom-lib/

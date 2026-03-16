@@ -325,6 +325,7 @@ const executors: Record<string, BlockExecutor> = {
   },
 
   // ── Content-script-required blocks ──────────────────────────────────────────
+  "action-chain": async (data, ctx) => contentScriptBlock("action-chain", data, ctx),
   "event-click": async (data, ctx) => contentScriptBlock("event-click", data, ctx),
   "hover-element": async (data, ctx) => contentScriptBlock("hover-element", data, ctx),
   "get-text": async (data, ctx) => contentScriptBlock("get-text", data, ctx),

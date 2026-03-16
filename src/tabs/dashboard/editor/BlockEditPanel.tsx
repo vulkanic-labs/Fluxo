@@ -12,10 +12,30 @@ import {
   EditJavascriptCodePanel,
   EditWebhookPanel,
   EditDelayPanel,
+  EditWaitConnectionsPanel,
   EditExecuteWorkflowPanel,
   EditExportDataPanel,
   EditClipboardPanel,
+  EditLogDataPanel,
+  EditTabURLPanel,
+  EditCookiePanel,
+  EditCreateElementPanel,
+  EditIncreaseVariablePanel,
+  EditSliceVariablePanel,
+  EditNotificationPanel,
+  EditLoopDataPanel,
+  EditLoopElementsPanel,
+  EditInsertDataPanel,
+  EditDeleteDataPanel,
+  EditDataMappingPanel,
+  EditSortDataPanel,
+  EditRegexVariablePanel,
+  EditGoogleDrivePanel,
+  EditAiWorkflowPanel,
+  EditWorkflowStatePanel,
+  EditParameterPromptPanel,
   GenericEditPanel,
+  EditActionChain,
 } from "../panels";
 
 export interface BlockEditPanelProps {
@@ -37,9 +57,29 @@ const PANEL_MAP: Record<string, React.ComponentType<EditPanelProps>> = {
   "javascript-code": EditJavascriptCodePanel,
   webhook: EditWebhookPanel,
   delay: EditDelayPanel,
+  "wait-connections": EditWaitConnectionsPanel,
+  "action-chain": EditActionChain,
   "execute-workflow": EditExecuteWorkflowPanel,
   "export-data": EditExportDataPanel,
   clipboard: EditClipboardPanel,
+  "log-data": EditLogDataPanel,
+  "tab-url": EditTabURLPanel,
+  cookie: EditCookiePanel,
+  "create-element": EditCreateElementPanel,
+  "increase-variable": EditIncreaseVariablePanel,
+  "slice-variable": EditSliceVariablePanel,
+  notification: EditNotificationPanel,
+  "loop-data": EditLoopDataPanel,
+  "loop-elements": EditLoopElementsPanel,
+  "insert-data": EditInsertDataPanel,
+  "delete-data": EditDeleteDataPanel,
+  "data-mapping": EditDataMappingPanel,
+  "sort-data": EditSortDataPanel,
+  "regex-variable": EditRegexVariablePanel,
+  "google-drive": EditGoogleDrivePanel,
+  "ai-workflow": EditAiWorkflowPanel,
+  "workflow-state": EditWorkflowStatePanel,
+  "parameter-prompt": EditParameterPromptPanel,
 };
 
 export interface EditPanelProps {
@@ -64,7 +104,7 @@ export function BlockEditPanel({ nodeId, blockTypeId, data, onClose, onUpdate }:
   };
 
   return (
-    <div className="h-full flex flex-col bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 w-80 shrink-0 transition-colors">
+    <div className="h-full flex flex-col bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 w-full transition-colors">
       {/* Header */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 dark:border-gray-800 shrink-0">
         <button

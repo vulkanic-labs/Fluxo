@@ -2,7 +2,12 @@ import type { PlasmoCSConfig, PlasmoGetStyle } from "plasmo";
 import cssText from "data-text:~style.css";
 import browser from "webextension-polyfill";
 import { useEffect } from "react";
-import { messagingService } from "~services/MessagingService";
+import { DOMWatcher } from "~services/dom/DOMWatcher";
+import { Scroller } from "~services/dom/Scroller";
+
+// Shared instances for the content script
+const watcher = new DOMWatcher();
+const scroller = new Scroller();
 
 export const config: PlasmoCSConfig = {
   matches: ["<all_urls>"],
@@ -55,184 +60,286 @@ const FluxoContentScript = () => {
     };
   }, []);
 
-  return null; // Will return UI overlays here like Element Picker / Command Palette
+  return null;
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Content Script Block Execution Logic
 // ──────────────────────────────────────────────────────────────────────────────
 
-async function handleBlockExecution({ blockType, blockData, variables, tableData }: any, state: { contextElement: Element | null, textSelection: string }) {
-  console.log(`[Fluxo] Executing DOM block: ${blockType}`, blockData);
+async function handleBlockExecution(
+  { blockType, blockData, variables, tableData }: any, 
+  state: { contextElement: Element | null, textSelection: string },
+  context: Element | Document = document
+): Promise<any> {
+  console.log(`[Fluxo] Executing block: ${blockType}`, blockData);
 
-  const resolveValue = (v: string) => {
+  const resolveValue = (v: any): any => {
+    if (v === undefined || v === null) return v;
     if (typeof v !== "string") return v;
-    return v.replace(/\{\{(.+?)\}\}/g, (_, key) => {
+    
+    // Support {{variableName}}
+    let resolved = v.replace(/\{\{(.+?)\}\}/g, (_, key) => {
       const trimmed = key.trim();
       if (variables[trimmed] !== undefined) return String(variables[trimmed]);
       return `{{${key}}}`;
     });
+
+    // Support variables.path.to.value (often used for indices or message strings)
+    if (resolved.includes("variables.")) {
+      const parts = resolved.split(".");
+      if (parts[0] === "variables") {
+        let current: any = variables;
+        for (let i = 1; i < parts.length; i++) {
+          if (current[parts[i]] !== undefined) {
+            current = current[parts[i]];
+          } else {
+            return resolved; // Fallback to original if path fails
+          }
+        }
+        return current;
+      }
+    }
+
+    return resolved;
   };
 
-  const getElements = (selector: string, multiple = false) => {
-    if (!selector) return [];
-    try {
-      if (selector.startsWith("xpath:")) {
-        const xp = selector.replace("xpath:", "");
-        const iter = document.evaluate(xp, document, null, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
-        const nodes = [];
-        let node = iter.iterateNext();
-        while (node) { nodes.push(node as Element); node = iter.iterateNext(); }
-        return multiple ? nodes : nodes.slice(0, 1);
+  /**
+   * Helper to execute a sequence of steps (used by action-chain and postActions)
+   */
+  const executeSteps = async (steps: any[], currentContext: Element | Document) => {
+    let ctx = currentContext;
+    for (const step of steps) {
+      const blockParams = step.params || {};
+      // Some legacy workflows use top-level selector instead of params.selector
+      const blockDataToPass = { ...blockParams };
+      if (step.selector && !blockDataToPass.selector) blockDataToPass.selector = step.selector;
+
+      const result = await handleBlockExecution(
+        { 
+          blockType: step.action, 
+          blockData: blockDataToPass, 
+          variables, 
+          tableData 
+        }, 
+        state, 
+        ctx
+      );
+      
+      // Context chaining: if the action returned an element, use it as context for next steps
+      if (result && (result instanceof Element || result.element instanceof Element)) {
+        ctx = result.element || result;
       }
-      const nodes = document.querySelectorAll(selector);
-      return multiple ? Array.from(nodes) : [nodes[0]].filter(Boolean);
-    } catch {
-      return [];
     }
   };
 
   switch (blockType) {
-    case "event-click": {
-      const selector = resolveValue(blockData.selector);
-      const els = getElements(selector);
-      if (!els.length) throw new Error("Element not found");
-      const el = els[0] as HTMLElement;
-      el.click();
+    case "action-chain": {
+      const steps = blockData.steps || [];
+      await executeSteps(steps, context);
       return { success: true };
+    }
+
+    case "wait":
+    case "wait-element": {
+      const selector = resolveValue(blockData.selector);
+      const timeout = Number(blockData.timeout) || 10000;
+      const invisible = blockData.invisible || false;
+      const resolvedIndex = resolveValue(blockData.index);
+      const index = resolvedIndex === "all" ? "all" : (isNaN(Number(resolvedIndex)) ? undefined : Number(resolvedIndex));
+      
+      const condition = blockData.condition === "element_match" ? (el: Element) => {
+        const textToMatch = resolveValue(blockData.conditionParams?.text);
+        if (textToMatch) {
+          return el.textContent?.toLowerCase().includes(textToMatch.toLowerCase()) || false;
+        }
+        return true;
+      } : undefined;
+
+      try {
+        const result = await watcher.waitFor({ 
+          selector, 
+          root: context, 
+          timeout, 
+          invisible, 
+          index,
+          condition
+        });
+
+        // 1. Handle saveCountTo
+        if (blockData.saveCountTo && Array.isArray(result)) {
+          variables[blockData.saveCountTo] = result.length;
+        }
+
+        // 2. Handle extract
+        if (blockData.extract && result && !invisible) {
+          const el = Array.isArray(result) ? result[0] : (result as Element);
+          const prop = blockData.extract.property || "innerText";
+          const val = (el as any)[prop]?.trim() || "";
+          if (blockData.extract.saveTo) {
+            variables[blockData.extract.saveTo] = val;
+          }
+        }
+
+        // 3. Handle preEvents
+        if (blockData.preEvents && result && !invisible) {
+          const els = Array.isArray(result) ? result : [result as Element];
+          for (const el of els) {
+            for (const eventType of blockData.preEvents) {
+              el.dispatchEvent(new MouseEvent(eventType, { bubbles: true }));
+            }
+          }
+        }
+
+        // 4. Handle saveTo (element reference)
+        if (blockData.saveTo && result && !invisible) {
+          // Note: Variable storage for DOM elements might be limited, but we track locally
+          // for the duration of handleBlockExecution.
+        }
+
+        // 5. Handle postActions (Recursive Chain)
+        if (blockData.postActions && result && !invisible) {
+          const els = Array.isArray(result) ? result : [result as Element];
+          // Usually execute on the first match if multiple
+          await executeSteps(blockData.postActions, els[0]);
+        }
+
+        return { success: true, element: Array.isArray(result) ? result[0] : result };
+      } catch (err: any) {
+        if (blockData.optional) return { success: true, nextOutput: "output-2" };
+        throw err;
+      }
+    }
+
+    case "event-click":
+    case "click": {
+      const selector = resolveValue(blockData.selector);
+      const timeout = Number(blockData.timeout) || 5000;
+      
+      const el = await (selector 
+        ? watcher.waitFor({ selector, root: context, timeout }) 
+        : Promise.resolve(context instanceof Element ? context : null));
+
+      if (!(el instanceof HTMLElement)) throw new Error("Target element not found or not clickable");
+      
+      el.click();
+      if (blockData.waitAfter) await new Promise(r => setTimeout(r, Number(blockData.waitAfter)));
+      return { success: true, element: el };
+    }
+
+    case "right_click": {
+      const selector = resolveValue(blockData.selector);
+      const el = await (selector 
+        ? watcher.waitFor({ selector, root: context }) 
+        : Promise.resolve(context instanceof Element ? context : null));
+
+      if (!(el instanceof HTMLElement)) throw new Error("Element not found");
+      el.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
+      if (blockData.waitAfter) await new Promise(r => setTimeout(r, Number(blockData.waitAfter)));
+      return { success: true, element: el };
     }
 
     case "hover-element": {
       const selector = resolveValue(blockData.selector);
-      const els = getElements(selector);
-      if (!els.length) throw new Error("Element not found");
-      const el = els[0] as HTMLElement;
+      const el = await (selector 
+        ? watcher.waitFor({ selector, root: context }) 
+        : Promise.resolve(context instanceof Element ? context : null));
+
+      if (!(el instanceof HTMLElement)) throw new Error("Element not found");
       el.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
       el.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+      return { success: true, element: el };
+    }
+
+    case "log": {
+      const msg = resolveValue(blockData.message);
+      console.log(`[Fluxo Log] ${msg}`);
       return { success: true };
     }
 
     case "get-text": {
       const selector = resolveValue(blockData.selector);
-      const els = getElements(selector, blockData.multiple);
-      if (!els.length && !blockData.optional) throw new Error("Element not found");
+      const multiple = blockData.multiple;
       
-      const texts = els.map(e => e.textContent?.trim() || "");
-      const result = blockData.multiple ? texts : texts[0] || "";
+      const result = await watcher.waitFor({ 
+        selector, 
+        root: context, 
+        index: multiple ? "all" : 0, 
+        timeout: blockData.optional ? 1000 : 10000 
+      }).catch(() => null);
+
+      if (!result && !blockData.optional) throw new Error("Element not found");
+      
+      const els = Array.isArray(result) ? result : (result ? [result] : []);
+      const property = blockData.property || "innerText";
+      const texts = els.map(e => (e as any)[property]?.trim() || "");
+      const finalVal = multiple ? texts : texts[0] || "";
 
       const updates: any = {};
       if (blockData.assignVariable && blockData.variableName) {
-        updates.variables = { [blockData.variableName]: result };
+        updates.variables = { [blockData.variableName]: finalVal };
       }
       if (blockData.saveToTable && blockData.columnName) {
-        updates.tableData = { [blockData.columnName]: blockData.multiple ? result : [result] };
+        updates.tableData = { [blockData.columnName]: multiple ? finalVal : [finalVal] };
       }
-      return { success: true, ...updates };
+      return { success: true, ...updates, element: els[0] };
     }
 
     case "forms": {
       const selector = resolveValue(blockData.selector);
-      const els = getElements(selector);
-      if (!els.length) throw new Error("Element not found");
-      const el = els[0] as HTMLInputElement;
+      const el = await (selector 
+        ? watcher.waitFor({ selector, root: context }) 
+        : Promise.resolve(context instanceof Element ? context : null)) as HTMLInputElement;
+
+      if (!el) throw new Error("Element not found");
 
       if (blockData.getValue) {
         const val = el.value || el.getAttribute("value") || "";
         const updates: any = {};
         if (blockData.variableName) updates.variables = { [blockData.variableName]: val };
-        return { success: true, ...updates };
+        return { success: true, ...updates, element: el };
       }
 
-      // Set value
       const val = resolveValue(blockData.value);
       el.focus();
       el.value = val;
       el.dispatchEvent(new Event("input", { bubbles: true }));
       el.dispatchEvent(new Event("change", { bubbles: true }));
-      if (blockData.submitAfter) {
-        el.form?.submit();
-      }
-      return { success: true };
+      if (blockData.submitAfter) el.form?.submit();
+      return { success: true, element: el };
     }
 
     case "element-exists": {
       const selector = resolveValue(blockData.selector);
-      const els = getElements(selector);
-      if (els.length > 0) return { success: true, nextOutput: "output-1" };
-      return { success: true, nextOutput: "output-2" };
-    }
-
-    case "javascript-code": {
-      const code = resolveValue(blockData.code);
-      let userFunc;
+      const timeout = Number(blockData.timeout) || 3000;
+      const invisible = blockData.invisible || false;
+      
       try {
-        userFunc = new Function("variables", "tableData", "resolve", "reject", code);
-      } catch (err: any) {
-        throw new Error("Syntax error in custom JS: " + err.message);
+        await watcher.waitFor({ selector, root: context, timeout, invisible });
+        return { success: true, nextOutput: "output-1" };
+      } catch {
+        return { success: true, nextOutput: "output-2" };
       }
-
-      return new Promise((resolve, reject) => {
-        try {
-          // Provide variables and tableData by reference so they can be mutated
-          const result = userFunc(variables, tableData, 
-            (val: any) => resolve({ success: true, variables, tableData }), 
-            (err: any) => reject(new Error(err))
-          );
-          
-          // If the script doesn't call resolve/reject explicitly, resolve immediately
-          if (!code.includes("resolve(") && !code.includes("reject(")) {
-            resolve({ success: true, variables, tableData });
-          }
-        } catch (err: any) {
-          reject(new Error(err.message));
-        }
-      });
     }
 
-    case "attribute-value": {
+    case "element-scroll": {
       const selector = resolveValue(blockData.selector);
-      const els = getElements(selector);
-      if (!els.length) throw new Error("Element not found");
-      const el = els[0];
-      const attr = resolveValue(blockData.attributeName);
-      
-      if (blockData.action === "set") {
-        el.setAttribute(attr, resolveValue(blockData.attributeValue));
-        return { success: true };
+      const distance = Number(blockData.distance) || 0;
+      const type = blockData.scrollType || "bottom"; // bottom, top, element, amount
+
+      if (type === "bottom") {
+        await scroller.scrollToBottom({ timeout: blockData.timeout });
+      } else if (type === "element" && selector) {
+        await scroller.smoothScroll(selector);
       } else {
-        const val = el.getAttribute(attr) || "";
-        const updates: any = {};
-        if (blockData.variableName) updates.variables = { [blockData.variableName]: val };
-        return { success: true, ...updates };
+        const container = selector ? (document.querySelector(selector) as HTMLElement) : window;
+        container.scrollBy({ top: distance, behavior: "smooth" });
       }
-    }
-
-    case "trigger-event": {
-      const selector = resolveValue(blockData.selector);
-      const els = getElements(selector);
-      if (!els.length) throw new Error("Element not found");
-      const eventName = resolveValue(blockData.eventName);
-      const event = new Event(eventName, { bubbles: true, cancelable: true });
-      els[0].dispatchEvent(event);
-      return { success: true };
-    }
-
-    case "upload-file": {
-      const selector = resolveValue(blockData.selector);
-      const els = getElements(selector);
-      if (!els.length) throw new Error("Element not found");
-      const el = els[0] as HTMLInputElement;
-      
-      // Note: In browser extensions, we can't fully automate file selection due to security
-      // unless we use debugger or the user interacts. But we can try setting the files property
-      // if we have local file paths (limited in MV3).
-      console.warn("Upload file block has limited support in MV3 without debugger.");
       return { success: true };
     }
 
     case "javascript-code": {
       const code = resolveValue(blockData.code);
-      // Construct a script that roughly matches Automa's environment
       const script = `
         (async () => {
           const variables = ${JSON.stringify(variables)};
@@ -240,9 +347,6 @@ async function handleBlockExecution({ blockType, blockData, variables, tableData
           
           function automaNextBlock(data) {
             window.dispatchEvent(new CustomEvent('fluxo:next', { detail: { data, variables, tableData } }));
-          }
-          function automaSetVariable(name, value) {
-            variables[name] = value;
           }
           
           try {
@@ -275,17 +379,10 @@ async function handleBlockExecution({ blockType, blockData, variables, tableData
       });
     }
 
-    case "switch-to": {
-      // Logic for switching frames is handled by the background engine 
-      // targeting different frameIds. Here we just return success if we are the correct frame.
-      return { success: true };
-    }
-
     case "link": {
       const selector = resolveValue(blockData.selector);
-      const els = getElements(selector);
-      if (!els.length) throw new Error("Link not found");
-      const el = els[0] as HTMLAnchorElement;
+      const el = await watcher.waitFor({ selector, root: context }) as HTMLAnchorElement;
+      if (!el) throw new Error("Link not found");
       if (blockData.openInNewTab) {
         window.open(el.href, '_blank');
       } else {
@@ -312,7 +409,7 @@ async function handleBlockExecution({ blockType, blockData, variables, tableData
     }
 
     default:
-      console.warn(`[Fluxo] Block type '${blockType}' not fully implemented in content script yet.`);
+      console.warn(`[Fluxo] Block type '${blockType}' not fully implemented or handled.`);
       return { success: true };
   }
 }

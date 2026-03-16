@@ -106,7 +106,7 @@ export function EditorSidebar({ workflow, onUpdateWorkflow }: EditorSidebarProps
         {pinnedBlockDefs.length > 0 && (
           <BlockCategory
             name="Pinned"
-            color="bg-amber-50 text-amber-700"
+            color="bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400"
             blocks={pinnedBlockDefs}
             pinnedBlocks={pinnedBlocks}
             onPin={pinBlock}
@@ -125,7 +125,7 @@ export function EditorSidebar({ workflow, onUpdateWorkflow }: EditorSidebarProps
             <BlockCategory
               key={catId}
               name={catDef.name}
-              color={`bg-gray-50 ${catDef.color}`}
+              color={`bg-gray-50/50 dark:bg-gray-800/40 ${catDef.color}`}
               blocks={blocks}
               pinnedBlocks={pinnedBlocks}
               onPin={pinBlock}
@@ -155,20 +155,20 @@ function BlockCategory({ name, color, blocks, pinnedBlocks, onPin, onDragStart, 
   return (
     <div className="mb-1">
       <button
-        className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+        className={`w-full flex items-center justify-between px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border-y border-transparent dark:border-gray-800/50 ${color}`}
         onClick={onToggle}
       >
-        <span className={`text-xs font-semibold uppercase tracking-wider ${color.split(' ').filter(c => c.startsWith('text-')).join(' ')}`}>
+        <span className={`text-[10px] font-bold uppercase tracking-widest ${color.split(' ').filter(c => c.startsWith('text-')).join(' ')}`}>
           {name}
         </span>
         <div className="flex items-center gap-1">
-          <span className="text-xs text-gray-400 dark:text-gray-500">{blocks.length}</span>
+          <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 bg-white/50 dark:bg-gray-900/50 px-1.5 py-0.5 rounded-full">{blocks.length}</span>
           {collapsed ? <ChevronRight size={12} className="text-gray-400" /> : <ChevronDown size={12} className="text-gray-400" />}
         </div>
       </button>
 
       {!collapsed && (
-        <div className="px-2 pb-1 space-y-1">
+        <div className="px-2 pb-1 pt-1 space-y-1 bg-gray-50/20 dark:bg-gray-900/10">
           {blocks.map(block => (
             <BlockItem
               key={block.id}
@@ -200,17 +200,17 @@ function BlockItem({ block, isPinned, onPin, onDragStart }: BlockItemProps) {
       onDragStart={e => onDragStart(e, block)}
       onMouseEnter={() => setShowPinBtn(true)}
       onMouseLeave={() => setShowPinBtn(false)}
-      className="group flex items-center gap-2.5 px-2.5 py-2 rounded-lg border border-transparent hover:border-amber-300 dark:hover:border-amber-700 hover:bg-amber-50 dark:hover:bg-amber-900/20 cursor-grab active:cursor-grabbing transition-all"
+      className="group flex items-center gap-2.5 px-2.5 py-2 rounded-lg border border-transparent hover:border-amber-300 dark:hover:border-amber-700/50 hover:bg-amber-50 dark:hover:bg-amber-900/30 cursor-grab active:cursor-grabbing transition-all"
     >
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium text-gray-700 dark:text-gray-200 leading-tight truncate">{block.name}</p>
+        <p className="text-xs font-semibold text-gray-700 dark:text-gray-200 leading-tight truncate">{block.name}</p>
         {block.description && (
           <p className="text-[10px] text-gray-400 dark:text-gray-500 truncate mt-0.5">{block.description}</p>
         )}
       </div>
       {(showPinBtn || isPinned) && (
         <button
-          className={`p-0.5 rounded shrink-0 ${isPinned ? 'text-amber-500' : 'text-gray-300 hover:text-amber-400'}`}
+          className={`p-0.5 rounded shrink-0 transition-colors ${isPinned ? 'text-amber-500' : 'text-gray-300 hover:text-amber-400 dark:hover:text-amber-500'}`}
           title={isPinned ? "Unpin block" : "Pin block"}
           onClick={e => { e.stopPropagation(); onPin(block.id); }}
         >
